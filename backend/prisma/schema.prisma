@@ -1,0 +1,170 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String
+  name                  String
+  role                  String                 @default("USER") // "USER" or "ADMIN"
+  googleId              String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+  gamblingPlatforms     GamblingPlatform[]
+  gamblingEntries       GamblingEntry[]
+}
+
+model Category {
+  id           String        @id @default(uuid())
+  name         String        @unique
+  icon         String        @default("Briefcase")
+  color        String        @default("#64748b")
+  parentId     String?       @map("parent_id")
+  isSystem     Boolean       @default(false) @map("is_system")
+  transactions Transaction[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+model Transaction {
+  id                   String               @id @default(uuid())
+  userId               String               @map("user_id")
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactionDate      DateTime             @map("transaction_date")
+  amount               Float                // Representing DECIMAL(12,2)
+  transactionType      String               @map("transaction_type") // "Expense", "Income", "Transfer", "Gambling"
+  categoryId           String               @map("category_id")
+  category             Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subcategoryId        String?              @map("subcategory_id")
+  merchantName         String?              @map("merchant_name") // Amazon, Swiggy, Dominos, etc.
+  description          String?
+  paymentMethod        String?              @map("payment_method") // Cash, UPI, Card, Bank Transfer
+  accountId            String?              @map("account_id") // SBI, HDFC, Wallet
+  location             String?
+  currency             String               @default("INR")
+  isRecurring          Boolean              @default(false) @map("is_recurring")
+  recurrenceRule       String?              @map("recurrence_rule")
+  tags                 String?              // SQLite compatible JSON string array e.g. ["food", "pizza"]
+  note                 String?
+  receiptCount         Int                  @default(0) @map("receipt_count")
+
+  // Advanced & Budgeting Link fields
+  status               String               @default("Completed") // Completed, Pending
+  budgetId             String?              @map("budget_id")
+  goalId               String?              @map("goal_id")
+  aiCategoryConfidence Float?               @map("ai_category_confidence")
+  ocrProcessed         Boolean              @default(false) @map("ocr_processed")
+  isTaxDeductible      Boolean              @default(false) @map("is_tax_deductible")
+  isReimbursable       Boolean              @default(false) @map("is_reimbursable")
+  reimbursedAmount     Float                @default(0.0) @map("reimbursed_amount")
+  linkedTransactionId  String?              @map("linked_transaction_id")
+  importSource         String?              @map("import_source")
+  bankReferenceNo      String?              @map("bank_reference_no")
+
+  // Interactive Better UX fields
+  mood                 String?              // "Happy", "Neutral", "Sad", "Splurge", "Regret"
+  splitTransaction     String?              @map("split_transaction")
+  reminderDate         DateTime?            @map("reminder_date")
+  warrantyExpiry       DateTime?            @map("warranty_expiry")
+  favorite             Boolean              @default(false)
+  aiSuggestedCategory  String?              @map("ai_suggested_category")
+
+  receipts             TransactionReceipt[]
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  @@map("transactions")
+}
+
+model TransactionReceipt {
+  id            String      @id @default(uuid())
+  transactionId String      @map("transaction_id")
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  fileName      String      @map("file_name")
+  fileUrl       String      @map("file_url")
+  fileType      String      @map("file_type")
+  extractedText String?     @map("extracted_text")
+  aiSummary     String?     @map("ai_summary")
+  uploadedAt    DateTime    @default(now()) @map("uploaded_at")
+
+  @@map("transaction_receipts")
+}
+
+model Budget {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  amount    Float    // Budget limit
+  month     Int      // 1-12
+  year      Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, category, month, year])
+}
+
+model RecurringTransaction {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description   String
+  amount        Float
+  type          String    // "INCOME" or "EXPENSE"
+  category      String
+  subcategory   String?   @default("")
+  paymentMethod String
+  account       String
+  frequency     String    // "DAILY", "WEEKLY", "MONTHLY"
+  startDate     DateTime
+  endDate       DateTime?
+  nextRunDate   DateTime
+  lastRunDate   DateTime?
+  notes         String?   @default("")
+  tags          String?   @default("")
+  createdAt     DateTime  @default(now())
+}
+
+model GamblingPlatform {
+  id         String          @id @default(uuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String          // e.g. "Stake", "BC.Game"
+  websiteUrl String?         @default("")
+  currency   String          @default("INR")
+  status     String          @default("ACTIVE") // "ACTIVE" or "INACTIVE"
+  balance    Float           @default(0.0)
+  entries    GamblingEntry[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([userId, name])
+}
+
+model GamblingEntry {
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformId      String
+  platform        GamblingPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+  transactionType String           // "DEPOSIT", "WITHDRAWAL", "BONUS", "BET_PLACED", "BET_WON", "BET_LOST", etc.
+  amount          Float
+  currency        String           @default("INR")
+  date            DateTime
+  description     String
+  referenceId     String?          @default("")
+  notes           String?          @default("")
+  category        String           @default("Other") // "Sports Betting", "Casino", "Slots", "Poker", etc.
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}

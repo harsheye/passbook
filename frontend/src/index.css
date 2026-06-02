@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black;
+  }
+}
+
+@layer utilities {
+  .glass-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+  }
+  
+  .dark .glass-card {
+    background: #000000;
+    border: 1px solid #1e293b;
+  }
+
+  /* Custom Sleek Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 dark:bg-slate-800 rounded-full;
+  }
+}
+
+/* Stark highlights transitions */
+.text-glow {
+  text-shadow: none;
+}
+
+.text-glow-green {
+  text-shadow: none;
+}
+
+.pulsing-border {
+  animation: border-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes border-pulse {
+  0%, 100% {
+    border-color: rgba(0, 0, 0, 0.1);
+  }
+  50% {
+    border-color: rgba(0, 0, 0, 0.5);
+  }
+}
+
+.dark .pulsing-border {
+  animation: border-pulse-dark 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes border-pulse-dark {
+  0%, 100% {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+/* Invisible scrollbar utility */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
