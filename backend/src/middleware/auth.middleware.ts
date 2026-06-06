@@ -14,21 +14,17 @@ export interface AuthenticatedRequest extends Request {
 
 export const authenticateJWT = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    let localUser = await prisma.user.findUnique({
-      where: { email: 'local@passbook.com' }
+    const localUser = await prisma.user.upsert({
+      where: { email: 'local@passbook.com' },
+      update: {},
+      create: {
+        id: 'local-user',
+        email: 'local@passbook.com',
+        passwordHash: 'local_pass_hash_dummy',
+        name: 'Local User',
+        role: 'USER'
+      }
     });
-
-    if (!localUser) {
-      localUser = await prisma.user.create({
-        data: {
-          id: 'local-user',
-          email: 'local@passbook.com',
-          passwordHash: 'local_pass_hash_dummy',
-          name: 'Local User',
-          role: 'USER'
-        }
-      });
-    }
 
     req.user = {
       id: localUser.id,
