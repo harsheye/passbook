@@ -93,3 +93,50 @@ export const MapPinIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 16 }
     <Circle cx="12" cy="10" r="3" />
   </Svg>
 );
+
+export const HomeIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <Polyline points="9 22 9 12 15 12 15 22" />
+  </Svg>
+);
+
+export const SparklesIcon: React.FC<IconProps> = ({ color = '#2fb09b', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275Z" />
+    <Path d="m5 3 1 2.5L8.5 6 6 7 5 9.5 4 7 1.5 6 4 5.5Z" />
+    <Path d="m19 17 1 2.5 2.5.5-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1Z" />
+  </Svg>
+);
+
+export const SendIcon: React.FC<IconProps> = ({ color = '#000000', size = 18 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="m22 2-7 20-4-9-9-4Z" />
+    <Line x1="22" y1="2" x2="11" y2="13" />
+  </Svg>
+);
+
+export const StarIcon: React.FC<IconProps & { fill?: string }> = ({ color = '#94a3b8', size = 18, fill = 'none' }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+  </Svg>
+);
+
+export const PencilIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 18 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </Svg>
+);
+
+export const CameraIcon: React.FC<IconProps> = ({ color = '#10b981', size = 18 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+    <Circle cx="12" cy="13" r="4" />
+  </Svg>
+);
+
+export const ArrowLeftIcon: React.FC<IconProps> = ({ color = '#ffffff', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M19 12H5M12 19l-7-7 7-7" />
+  </Svg>
+);

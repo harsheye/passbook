@@ -21,7 +21,9 @@ import {
   ChevronDownIcon,
   SettingsIcon,
   CheckIcon,
-  ShieldIcon
+  ShieldIcon,
+  HomeIcon,
+  SparklesIcon
 } from '../components/SvgIcons';
 
 export const DashboardScreen: React.FC = () => {
@@ -117,6 +119,10 @@ export const DashboardScreen: React.FC = () => {
     }
   };
 
+  const handleHubPress = async () => {
+    navigation.navigate('Hub');
+  };
+
   // Group transactions by Date string for rendering
   const getGroupedData = () => {
     const groups: { [key: string]: Transaction[] } = {};
@@ -183,7 +189,7 @@ export const DashboardScreen: React.FC = () => {
 
           <View style={styles.headerActions}>
             <TouchableOpacity
-              onPress={() => navigation.navigate('Hub')}
+              onPress={handleHubPress}
               style={[styles.headerBtn, { marginRight: 8 }]}
             >
               <ShieldIcon color="#a78bfa" size={16} />
@@ -399,6 +405,37 @@ export const DashboardScreen: React.FC = () => {
           </View>
         </Modal>
 
+        {/* CUSTOM BOTTOM NAVIGATION BAR */}
+        <View style={styles.bottomTabBar}>
+          {/* Dashboard Tab */}
+          <TouchableOpacity
+            onPress={() => {}}
+            style={styles.tabBtn}
+          >
+            <HomeIcon color="#ffffff" size={18} />
+            <Text style={[styles.tabText, { color: '#ffffff' }]}>Home</Text>
+          </TouchableOpacity>
+
+          {/* AI Chat Tab (Highlight) */}
+          <View style={styles.centerTabWrapper}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Chat')}
+              style={styles.centerTabBtn}
+            >
+              <SparklesIcon color="#ffffff" size={20} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Hub Tab */}
+          <TouchableOpacity
+            onPress={handleHubPress}
+            style={styles.tabBtn}
+          >
+            <ShieldIcon color="#a78bfa" size={18} />
+            <Text style={styles.tabText}>Hub</Text>
+          </TouchableOpacity>
+        </View>
+
       </View>
     </SafeAreaView>
   );
@@ -574,7 +611,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   listContainer: {
-    paddingBottom: 80,
+    paddingBottom: 150,
   },
   dateHeader: {
     flexDirection: 'row',
@@ -675,7 +712,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 24,
+    bottom: 80,
     right: 16,
     width: 44,
     height: 44,
@@ -759,5 +796,52 @@ const styles = StyleSheet.create({
     color: '#09090b',
     fontSize: 10,
     fontWeight: '900',
+  },
+  bottomTabBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 56,
+    backgroundColor: '#09090b',
+    borderTopWidth: 1,
+    borderTopColor: '#1f4246',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    zIndex: 99,
+  },
+  tabBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  tabText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  centerTabWrapper: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  centerTabBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#10b981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
 });
