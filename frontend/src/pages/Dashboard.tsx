@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   TrendingDown,
@@ -99,6 +100,7 @@ const INCOME_CATEGORIES = [
 ];
 
 export const Dashboard: React.FC = () => {
+  const location = useLocation();
   const [data, setData] = useState<DashboardData | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categoriesList, setCategoriesList] = useState<any[]>([]);
@@ -147,9 +149,11 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    if (location.pathname === '/dashboard') {
+      fetchDashboardData();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterType, filterCat, sortBy, sortOrder]);
+  }, [location.pathname, filterType, filterCat, sortBy, sortOrder]);
 
   useEffect(() => {
     if (data) {

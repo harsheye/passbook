@@ -73,13 +73,20 @@ export const Login: React.FC = () => {
         
         {/* LOGO */}
         <div className="text-center space-y-1">
-          <div className="inline-flex p-2.5 bg-black dark:bg-white text-white dark:text-black rounded-2xl shadow-sm">
-            <CreditCard className="w-6 h-6" />
+          <div className="inline-flex p-2 bg-transparent text-black dark:text-white">
+            <svg width="48" height="48" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M50 5 L75 45 L85 75 L50 95 L15 75 L25 45 Z" />
+              <path d="M50 5 L38 58 L50 75 L62 58 L50 5" />
+              <path d="M25 45 L38 58 L15 75" />
+              <path d="M75 45 L62 58 L85 75" />
+              <path d="M38 58 L50 75 L62 58" />
+              <path d="M50 75 L50 95" />
+            </svg>
           </div>
           <h2 className="text-2xl font-black tracking-tight font-sans">
-            PASSBOOK
+            SALT
           </h2>
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mobile native premium passbook</p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mobile native premium companion</p>
         </div>
 
         {/* CONTAINER CARD */}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Calendar,
@@ -134,6 +135,7 @@ const CustomDatePicker: React.FC<{
 };
 
 export const Schedules: React.FC = () => {
+  const location = useLocation();
   const [schedules, setSchedules] = useState<RecurringTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -164,7 +166,9 @@ export const Schedules: React.FC = () => {
   const [modalFreqDropdownOpen, setModalFreqDropdownOpen] = useState(false);
 
   const fetchSchedules = async () => {
-    setLoading(true);
+    if (schedules.length === 0) {
+      setLoading(true);
+    }
     try {
       const res = await axios.get('/api/recurring');
       setSchedules(res.data);
@@ -176,8 +180,10 @@ export const Schedules: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchSchedules();
-  }, []);
+    if (location.pathname === '/schedules') {
+      fetchSchedules();
+    }
+  }, [location.pathname]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

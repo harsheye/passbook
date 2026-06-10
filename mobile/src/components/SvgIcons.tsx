@@ -140,3 +140,32 @@ export const ArrowLeftIcon: React.FC<IconProps> = ({ color = '#ffffff', size = 2
     <Path d="M19 12H5M12 19l-7-7 7-7" />
   </Svg>
 );
+
+export const ListIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Line x1="8" y1="6" x2="21" y2="6" strokeWidth="2.5" />
+    <Line x1="8" y1="12" x2="21" y2="12" strokeWidth="2.5" />
+    <Line x1="8" y1="18" x2="21" y2="18" strokeWidth="2.5" />
+    <Circle cx="3" cy="6" r="1" fill={color} />
+    <Circle cx="3" cy="12" r="1" fill={color} />
+    <Circle cx="3" cy="18" r="1" fill={color} />
+  </Svg>
+);
+
+export const UserIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 20 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" strokeWidth="2.5" />
+    <Circle cx="12" cy="7" r="4" strokeWidth="2.5" />
+  </Svg>
+);
+
+export const SaltLogo: React.FC<IconProps & { strokeWidth?: number }> = ({ color = '#2fb09b', size = 28, strokeWidth = 2.5 }) => (
+  <Svg width={size} height={size} viewBox="0 0 100 100" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M50 5 L75 45 L85 75 L50 95 L15 75 L25 45 Z" />
+    <Path d="M50 5 L38 58 L50 75 L62 58 L50 5" />
+    <Path d="M25 45 L38 58 L15 75" />
+    <Path d="M75 45 L62 58 L85 75" />
+    <Path d="M38 58 L50 75 L62 58" />
+    <Path d="M50 75 L50 95" />
+  </Svg>
+);

@@ -8,12 +8,15 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView
+  SafeAreaView,
+  Platform,
+  StatusBar
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { createTransactionApi } from '../api/api';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { createTransactionApi, api } from '../api/api';
 import { CustomDatePicker } from '../components/CustomDatePicker';
 import { ChevronDownIcon } from '../components/SvgIcons';
+import { useTheme } from '../context/ThemeContext';
 
 const EXPENSE_CATEGORIES = [
   'Beauty/Wellness',
@@ -50,18 +53,31 @@ const INCOME_CATEGORIES = [
 
 export const AddTransactionScreen: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<any, any>>();
+  const { isDark, colors } = useTheme();
+  const editingTxn = route.params?.transaction;
 
-  // Form states
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [txnType, setTxnType] = useState<'Expense' | 'Income' | 'Transfer'>('Expense');
-  const [category, setCategory] = useState('Eating Out/Ordering In');
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
-  const [account, setAccount] = useState('SBI');
-  const [notes, setNotes] = useState('');
-  const [merchantName, setMerchantName] = useState('');
-  const [location, setLocation] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  // Form states pre-filled if editing
+  const [description, setDescription] = useState(editingTxn ? editingTxn.description : '');
+  const [amount, setAmount] = useState(editingTxn ? String(Math.abs(editingTxn.amount)) : '');
+  const [txnType, setTxnType] = useState<'Expense' | 'Income' | 'Transfer'>(
+    editingTxn ? (editingTxn.transactionType || 'Expense') : 'Expense'
+  );
+  const [category, setCategory] = useState(
+    editingTxn
+      ? (typeof editingTxn.category === 'object' ? editingTxn.category.name : editingTxn.category)
+      : 'Eating Out/Ordering In'
+  );
+  const [paymentMethod, setPaymentMethod] = useState(editingTxn ? editingTxn.paymentMethod : 'UPI');
+  const [account, setAccount] = useState(editingTxn ? (editingTxn.accountId || editingTxn.account) : 'SBI');
+  const [notes, setNotes] = useState(editingTxn ? (editingTxn.note || '') : '');
+  const [merchantName, setMerchantName] = useState(editingTxn ? (editingTxn.merchantName || '') : '');
+  const [location, setLocation] = useState(editingTxn ? (editingTxn.location || '') : '');
+  const [date, setDate] = useState(
+    editingTxn
+      ? (editingTxn.transactionDate ? editingTxn.transactionDate.split('T')[0] : new Date().toISOString().split('T')[0])
+      : new Date().toISOString().split('T')[0]
+  );
 
   // Dropdowns toggles
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
@@ -95,33 +111,48 @@ export const AddTransactionScreen: React.FC = () => {
     }
 
     setSubmitting(true);
-    // Signed amount for DB (negative for Expense, positive for Income/Transfer)
     const signedAmount = txnType === 'Expense' ? -parsedAmount : parsedAmount;
 
     try {
-      await createTransactionApi({
-        description: description.trim(),
-        amount: signedAmount,
-        type: txnType,
-        category: txnType === 'Transfer' ? 'Money Transfers' : category,
-        paymentMethod,
-        account,
-        date,
-        notes: notes.trim() || undefined,
-        merchantName: txnType !== 'Transfer' && merchantName.trim() ? merchantName.trim() : undefined,
-        location: txnType !== 'Transfer' && location.trim() ? location.trim() : undefined,
-      });
-
-      Alert.alert('Success', 'Transaction created successfully.');
+      if (editingTxn) {
+        // PUT update request
+        await api.put(`/api/transactions/${editingTxn.id}`, {
+          description: description.trim(),
+          amount: signedAmount,
+          type: txnType,
+          category: txnType === 'Transfer' ? 'Money Transfers' : category,
+          paymentMethod,
+          account,
+          date: new Date(date).toISOString(),
+          notes: notes.trim() || undefined,
+          merchantName: txnType !== 'Transfer' && merchantName.trim() ? merchantName.trim() : undefined,
+          location: txnType !== 'Transfer' && location.trim() ? location.trim() : undefined,
+        });
+        Alert.alert('Success', 'Transaction updated successfully.');
+      } else {
+        // POST create request
+        await createTransactionApi({
+          description: description.trim(),
+          amount: signedAmount,
+          type: txnType,
+          category: txnType === 'Transfer' ? 'Money Transfers' : category,
+          paymentMethod,
+          account,
+          date,
+          notes: notes.trim() || undefined,
+          merchantName: txnType !== 'Transfer' && merchantName.trim() ? merchantName.trim() : undefined,
+          location: txnType !== 'Transfer' && location.trim() ? location.trim() : undefined,
+        });
+        Alert.alert('Success', 'Transaction created successfully.');
+      }
       navigation.goBack();
     } catch (err) {
-      Alert.alert('Submission Error', 'Failed to create transaction. Please check server connection.');
+      Alert.alert('Submission Error', 'Failed to save transaction. Please check server connection.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Border colors matching web app customizer modal card
   const getBorderColor = () => {
     if (txnType === 'Income') return '#2fb09b';
     if (txnType === 'Transfer') return '#71717a';
@@ -131,42 +162,42 @@ export const AddTransactionScreen: React.FC = () => {
   const categoriesList = txnType === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
           
-          <Text style={styles.brandTitle}>NEW ENTRY</Text>
+          <Text style={[styles.brandTitle, { color: colors.subText }]}>{editingTxn ? 'EDIT ENTRY' : 'NEW ENTRY'}</Text>
 
           {/* INPUT FORM CARD WITH DYNAMIC ACCENT BORDER */}
-          <View style={[styles.formCard, { borderLeftColor: getBorderColor(), borderBottomColor: getBorderColor() }]}>
+          <View style={[styles.formCard, { backgroundColor: colors.card, borderLeftColor: getBorderColor(), borderBottomColor: getBorderColor() }]}>
             
             {/* Description Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Description</Text>
+              <Text style={[styles.label, { color: colors.subText }]}>Description</Text>
               <TextInput
-                style={styles.descInput}
+                style={[styles.descInput, { color: colors.text, borderBottomColor: colors.border }]}
                 value={description}
                 onChangeText={setDescription}
                 placeholder={txnType === 'Transfer' ? 'HDFC to SBI' : 'Restaurant bill...'}
-                placeholderTextColor="#a1a1aa"
+                placeholderTextColor={colors.subText}
               />
             </View>
 
             {/* Date and Amount Row */}
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Date</Text>
-                <CustomDatePicker value={date} onChange={setDate} dark />
+                <Text style={[styles.label, { color: colors.subText }]}>Date</Text>
+                <CustomDatePicker value={date} onChange={setDate} dark={isDark} />
               </View>
 
               <View style={[styles.col, { alignItems: 'flex-end' }]}>
-                <Text style={styles.label}>Amount (₹)</Text>
+                <Text style={[styles.label, { color: colors.subText }]}>Amount (₹)</Text>
                 <TextInput
-                  style={styles.amountInput}
+                  style={[styles.amountInput, { color: colors.text, borderBottomColor: colors.border }]}
                   value={amount}
                   onChangeText={setAmount}
                   placeholder="0.00"
-                  placeholderTextColor="#a1a1aa"
+                  placeholderTextColor={colors.subText}
                   keyboardType="numeric"
                 />
               </View>
@@ -177,28 +208,28 @@ export const AddTransactionScreen: React.FC = () => {
               
               {/* Type Select */}
               <View style={styles.col}>
-                <Text style={styles.boxLabel}>Type</Text>
+                <Text style={[styles.boxLabel, { color: colors.subText }]}>Type</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setTypeDropdownOpen(!typeDropdownOpen);
                     setCategoryDropdownOpen(false);
                     setPmDropdownOpen(false);
                   }}
-                  style={styles.dropdownBtn}
+                  style={[styles.dropdownBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                 >
                   <Text style={[styles.dropdownBtnText, { color: getBorderColor() }]}>{txnType}</Text>
-                  <ChevronDownIcon color="#71717a" size={12} />
+                  <ChevronDownIcon color={colors.subText} size={12} />
                 </TouchableOpacity>
 
                 {typeDropdownOpen && (
-                  <View style={styles.boxMenu}>
+                  <View style={[styles.boxMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
                     {['Expense', 'Income', 'Transfer'].map(t => (
                       <TouchableOpacity
                         key={t}
                         onPress={() => handleTypeSelect(t as any)}
                         style={styles.boxMenuItem}
                       >
-                        <Text style={styles.boxMenuText}>{t}</Text>
+                        <Text style={[styles.boxMenuText, { color: colors.text }]}>{t}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -207,24 +238,24 @@ export const AddTransactionScreen: React.FC = () => {
 
               {/* Category Select */}
               <View style={styles.col}>
-                <Text style={styles.boxLabel}>Category</Text>
+                <Text style={[styles.boxLabel, { color: colors.subText }]}>Category</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setCategoryDropdownOpen(!categoryDropdownOpen);
                     setTypeDropdownOpen(false);
                     setPmDropdownOpen(false);
                   }}
-                  style={styles.dropdownBtn}
+                  style={[styles.dropdownBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                   disabled={txnType === 'Transfer'}
                 >
-                  <Text numberOfLines={1} style={styles.dropdownBtnText}>
+                  <Text numberOfLines={1} style={[styles.dropdownBtnText, { color: colors.text }]}>
                     {txnType === 'Transfer' ? 'Money Transfers' : category}
                   </Text>
-                  {txnType !== 'Transfer' && <ChevronDownIcon color="#71717a" size={12} />}
+                  {txnType !== 'Transfer' && <ChevronDownIcon color={colors.subText} size={12} />}
                 </TouchableOpacity>
 
                 {categoryDropdownOpen && (
-                  <View style={[styles.boxMenu, { right: 0 }]}>
+                  <View style={[styles.boxMenu, { right: 0, backgroundColor: colors.card, borderColor: colors.border }]}>
                     <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
                       {categoriesList.map(c => (
                         <TouchableOpacity
@@ -235,7 +266,7 @@ export const AddTransactionScreen: React.FC = () => {
                           }}
                           style={styles.boxMenuItem}
                         >
-                          <Text style={styles.boxMenuText}>{c}</Text>
+                          <Text style={[styles.boxMenuText, { color: colors.text }]}>{c}</Text>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
@@ -247,32 +278,32 @@ export const AddTransactionScreen: React.FC = () => {
             {/* Account and Method Row */}
             <View style={styles.row}>
               <View style={styles.col}>
-                <Text style={styles.label}>Account</Text>
+                <Text style={[styles.label, { color: colors.subText }]}>Account</Text>
                 <TextInput
-                  style={styles.inputField}
+                  style={[styles.inputField, { color: colors.text, borderBottomColor: colors.border }]}
                   value={account}
                   onChangeText={setAccount}
                   placeholder="SBI"
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={colors.subText}
                 />
               </View>
 
               <View style={styles.col}>
-                <Text style={styles.label}>Payment Method</Text>
+                <Text style={[styles.label, { color: colors.subText }]}>Payment Method</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setPmDropdownOpen(!pmDropdownOpen);
                     setTypeDropdownOpen(false);
                     setCategoryDropdownOpen(false);
                   }}
-                  style={styles.dropdownBtn}
+                  style={[styles.dropdownBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                 >
-                  <Text style={styles.dropdownBtnText}>{paymentMethod}</Text>
-                  <ChevronDownIcon color="#71717a" size={12} />
+                  <Text style={[styles.dropdownBtnText, { color: colors.text }]}>{paymentMethod}</Text>
+                  <ChevronDownIcon color={colors.subText} size={12} />
                 </TouchableOpacity>
 
                 {pmDropdownOpen && (
-                  <View style={[styles.boxMenu, { right: 0, top: 46 }]}>
+                  <View style={[styles.boxMenu, { right: 0, top: 46, backgroundColor: colors.card, borderColor: colors.border }]}>
                     {['UPI', 'Cash', 'Credit Card', 'Debit Card', 'Net Banking'].map(method => (
                       <TouchableOpacity
                         key={method}
@@ -282,7 +313,7 @@ export const AddTransactionScreen: React.FC = () => {
                         }}
                         style={styles.boxMenuItem}
                       >
-                        <Text style={styles.boxMenuText}>{method}</Text>
+                        <Text style={[styles.boxMenuText, { color: colors.text }]}>{method}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -294,24 +325,24 @@ export const AddTransactionScreen: React.FC = () => {
             {txnType !== 'Transfer' && (
               <View style={styles.row}>
                 <View style={styles.col}>
-                  <Text style={styles.label}>Merchant</Text>
+                  <Text style={[styles.label, { color: colors.subText }]}>Merchant</Text>
                   <TextInput
-                    style={styles.inputField}
+                    style={[styles.inputField, { color: colors.text, borderBottomColor: colors.border }]}
                     value={merchantName}
                     onChangeText={setMerchantName}
                     placeholder="Swiggy"
-                    placeholderTextColor="#71717a"
+                    placeholderTextColor={colors.subText}
                   />
                 </View>
 
                 <View style={styles.col}>
-                  <Text style={styles.label}>Location</Text>
+                  <Text style={[styles.label, { color: colors.subText }]}>Location</Text>
                   <TextInput
-                    style={styles.inputField}
+                    style={[styles.inputField, { color: colors.text, borderBottomColor: colors.border }]}
                     value={location}
                     onChangeText={setLocation}
                     placeholder="Karimpur"
-                    placeholderTextColor="#71717a"
+                    placeholderTextColor={colors.subText}
                   />
                 </View>
               </View>
@@ -319,13 +350,13 @@ export const AddTransactionScreen: React.FC = () => {
 
             {/* Notes Log */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Notes Log</Text>
+              <Text style={[styles.label, { color: colors.subText }]}>Notes Log</Text>
               <TextInput
-                style={[styles.inputField, styles.textArea]}
+                style={[styles.inputField, styles.textArea, { color: colors.text, borderBottomColor: colors.border }]}
                 value={notes}
                 onChangeText={setNotes}
                 placeholder="Additional details..."
-                placeholderTextColor="#71717a"
+                placeholderTextColor={colors.subText}
                 multiline
                 numberOfLines={3}
               />
@@ -337,21 +368,21 @@ export const AddTransactionScreen: React.FC = () => {
           <View style={styles.actions}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              style={[styles.btn, styles.btnCancel]}
+              style={[styles.btn, styles.btnCancel, { borderColor: colors.border }]}
               disabled={submitting}
             >
-              <Text style={styles.btnTextCancel}>Cancel</Text>
+              <Text style={[styles.btnTextCancel, { color: colors.subText }]}>Cancel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleSubmit}
-              style={[styles.btn, styles.btnSave]}
+              style={[styles.btn, styles.btnSave, { backgroundColor: colors.text, borderColor: colors.text }]}
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator size="small" color="#000" />
+                <ActivityIndicator size="small" color={colors.background} />
               ) : (
-                <Text style={styles.btnTextSave}>Save Entry</Text>
+                <Text style={[styles.btnTextSave, { color: colors.background }]}>Save Entry</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -365,7 +396,6 @@ export const AddTransactionScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#09090b',
   },
   scrollContainer: {
     paddingBottom: 40,

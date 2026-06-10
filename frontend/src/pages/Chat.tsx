@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import confetti from 'canvas-confetti';
 import {
@@ -202,11 +202,21 @@ export const Chat: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const [showLazyBanner, setShowLazyBanner] = useState(true);
   const [showAddTagInput, setShowAddTagInput] = useState<string | null>(null);
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom on tab focus
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      }, 50);
+    }
+  }, [location.pathname]);
 
   // Save messages to localStorage and auto-scroll to bottom
   useEffect(() => {

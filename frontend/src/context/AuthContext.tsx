@@ -26,6 +26,116 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const apiHost = typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:5000` : 'http://localhost:5000';
 axios.defaults.baseURL = apiHost;
 
+// Offline/LocalStorage caching and sync interceptor for Axios
+if (typeof window !== 'undefined' && window.localStorage) {
+  // Response interceptor to cache GET results and handle offline failures
+  axios.interceptors.response.use(
+    (response) => {
+      // Cache successful GET requests
+      if (response.config.method?.toLowerCase() === 'get') {
+        const cacheKey = `axios_cache_${response.config.url}_${JSON.stringify(response.config.params || {})}`;
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({
+            timestamp: Date.now(),
+            data: response.data
+          }));
+        } catch (e) {
+          console.warn('Failed to save to localStorage cache:', e);
+        }
+      }
+      return response;
+    },
+    async (error) => {
+      const { config, message } = error;
+      const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || message?.toLowerCase().includes('network error');
+      
+      if (isNetworkError && config) {
+        // Fallback for GET requests
+        if (config.method?.toLowerCase() === 'get') {
+          const cacheKey = `axios_cache_${config.url}_${JSON.stringify(config.params || {})}`;
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            try {
+              const { data } = JSON.parse(cached);
+              console.warn(`[Offline Mode] Serving cached data for GET ${config.url}`);
+              return Promise.resolve({
+                data,
+                status: 200,
+                statusText: 'OK',
+                headers: {},
+                config,
+                request: {}
+              });
+            } catch (e) {
+              console.error('Failed to parse cached data:', e);
+            }
+          }
+        }
+        
+        // Queue mutations for POST/PUT/DELETE
+        if (['post', 'put', 'delete'].includes(config.method?.toLowerCase() || '')) {
+          console.warn(`[Offline Mode] Queuing mutation: ${config.method?.toUpperCase()} ${config.url}`);
+          const queueKey = 'axios_offline_queue';
+          const currentQueue = JSON.parse(localStorage.getItem(queueKey) || '[]');
+          
+          currentQueue.push({
+            id: `${Date.now()}_${Math.random()}`,
+            url: config.url,
+            method: config.method,
+            data: config.data ? (typeof config.data === 'string' ? JSON.parse(config.data) : config.data) : null
+          });
+          
+          localStorage.setItem(queueKey, JSON.stringify(currentQueue));
+          alert(`[Offline Mode] Connection lost or server down. Your changes have been cached locally and will sync when you are back online.`);
+          
+          return Promise.resolve({
+            data: { success: true, message: 'Queued offline successfully', id: 'offline-mock-id' },
+            status: 200,
+            statusText: 'OK',
+            headers: {},
+            config,
+            request: {}
+          });
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  // Background sync helper
+  const syncOfflineQueue = async () => {
+    if (navigator.onLine) {
+      const queueKey = 'axios_offline_queue';
+      const queue = JSON.parse(localStorage.getItem(queueKey) || '[]');
+      if (queue.length === 0) return;
+      
+      console.log(`[Sync] Found ${queue.length} pending offline mutations. Syncing...`);
+      const remainingQueue = [];
+      
+      for (const item of queue) {
+        try {
+          if (item.method === 'post') {
+            await axios.post(item.url, item.data);
+          } else if (item.method === 'put') {
+            await axios.put(item.url, item.data);
+          } else if (item.method === 'delete') {
+            await axios.delete(item.url);
+          }
+          console.log(`[Sync] Successfully synced: ${item.method.toUpperCase()} ${item.url}`);
+        } catch (err) {
+          console.error(`[Sync] Failed to sync ${item.method.toUpperCase()} ${item.url}:`, err);
+          remainingQueue.push(item);
+        }
+      }
+      
+      localStorage.setItem(queueKey, JSON.stringify(remainingQueue));
+    }
+  };
+
+  window.addEventListener('online', syncOfflineQueue);
+  window.addEventListener('load', syncOfflineQueue);
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -33,19 +143,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load token on mount
   useEffect(() => {
-    const savedToken = 'local-mode-dummy-token';
-    const savedUser: User = {
-      id: 'local-user',
-      email: 'local@passbook.com',
-      name: 'Local User',
-      role: 'USER'
-    };
+    const savedToken = localStorage.getItem('token');
+    const savedUserStr = localStorage.getItem('user');
 
-    setToken(savedToken);
-    setUser(savedUser);
-    localStorage.setItem('token', savedToken);
-    localStorage.setItem('user', JSON.stringify(savedUser));
-    axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+    if (savedToken && savedUserStr) {
+      try {
+        const savedUser = JSON.parse(savedUserStr);
+        setToken(savedToken);
+        setUser(savedUser);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+      } catch (e) {
+        console.error('Failed to parse saved user:', e);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+    }
     setLoading(false);
   }, []);
 

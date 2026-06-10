@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 // Load environment variables before importing app
-dotenv.config();
+dotenv.config({ override: true });
 
 import app from './app';
 

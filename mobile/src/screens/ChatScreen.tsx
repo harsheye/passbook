@@ -14,13 +14,16 @@ import {
   StatusBar,
   Modal,
   FlatList,
-  Image
+  Image,
+  BackHandler
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { api, getBaseUrl } from '../api/api';
+import { BottomTabBar } from '../components/BottomTabBar';
+import { useTheme } from '../context/ThemeContext';
 import {
   SparklesIcon,
   SendIcon,
@@ -110,6 +113,7 @@ const getCategoryEmoji = (category: string, type?: string) => {
 
 export const ChatScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
+  const { isDark, colors } = useTheme();
 
   // States
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -130,6 +134,42 @@ export const ChatScreen: React.FC = () => {
   const [tagInputValue, setTagInputValue] = useState('');
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Handle Android hardware back button to navigate to Dashboard
+  useEffect(() => {
+    const backAction = () => {
+      navigation.navigate('Dashboard');
+      return true; // prevent default behavior
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [navigation]);
+
+  const handleCameraPress = () => {
+    Alert.alert(
+      'Mock Scanner Selector',
+      'Choose what to upload and scan:',
+      [
+        {
+          text: 'Scan Receipt (OCR)',
+          onPress: () => handleMockScan('receipt'),
+        },
+        {
+          text: 'Mock Photo Scan',
+          onPress: () => handleMockScan('item'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
 
   // Load chat history
   useEffect(() => {
@@ -603,38 +643,41 @@ export const ChatScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#183235" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardContainer}
       >
         {/* HEADER SECTION */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-            <ArrowLeftIcon color="#ffffff" size={16} />
+        <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.headerBtn, { backgroundColor: colors.inputBackground }]}>
+            <ArrowLeftIcon color={colors.text} size={16} />
           </TouchableOpacity>
           
-          <View style={styles.headerBrandGroup}>
-            <View style={styles.pulseIndicator} />
-            <Text style={styles.brandText}>Passbook AI</Text>
-            <ChevronDownIcon color="#7ea0a4" size={10} />
+          <View style={[styles.headerBrandGroup, { backgroundColor: isDark ? '#1f4246' : colors.inputBackground }]}>
+            <View style={[styles.pulseIndicator, { backgroundColor: isDark ? '#2fb09b' : '#10b981' }]} />
+            <Text style={[styles.brandText, { color: colors.text }]}>Passbook AI</Text>
+            <ChevronDownIcon color={colors.subText} size={10} />
           </View>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Dashboard')} style={styles.headerBtn}>
-            <HomeIcon color="#ffffff" size={16} />
+          <TouchableOpacity onPress={() => navigation.navigate('Dashboard')} style={[styles.headerBtn, { backgroundColor: colors.inputBackground }]}>
+            <HomeIcon color={colors.text} size={16} />
           </TouchableOpacity>
         </View>
 
         {/* MESSAGES THREAD */}
         <ScrollView
           ref={scrollViewRef}
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
         >
           {messages.length > 1 && (
-            <TouchableOpacity onPress={handleClearHistory} style={styles.clearHistoryBtn}>
-              <Text style={styles.clearHistoryText}>Clear Chat History</Text>
+            <TouchableOpacity onPress={handleClearHistory} style={[styles.clearHistoryBtn, { borderColor: colors.border }]}>
+              <Text style={[styles.clearHistoryText, { color: colors.subText }]}>Clear Chat History</Text>
             </TouchableOpacity>
           )}
 
@@ -642,17 +685,17 @@ export const ChatScreen: React.FC = () => {
             const isUser = m.sender === 'user';
             return (
               <View key={m.id} style={[styles.msgContainer, isUser ? styles.msgUser : styles.msgAI]}>
-                <Text style={styles.senderLabel}>
+                <Text style={[styles.senderLabel, { color: colors.subText }]}>
                   {isUser ? 'You' : 'Passbook Assistant'}
                 </Text>
 
                 {isUser ? (
-                  <View style={styles.bubbleUser}>
-                    <Text style={styles.bubbleUserText}>{m.text}</Text>
+                  <View style={[styles.bubbleUser, { backgroundColor: isDark ? '#ffffff' : colors.inputBackground }]}>
+                    <Text style={[styles.bubbleUserText, { color: isDark ? '#122325' : colors.text }]}>{m.text}</Text>
                     {m.imageUrl && (
-                      <View style={styles.bubbleImageContainer}>
-                        <View style={styles.attachmentHeader}>
-                          <Text style={styles.attachmentText}>attachment_file.png</Text>
+                      <View style={[styles.bubbleImageContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                        <View style={[styles.attachmentHeader, { borderBottomColor: colors.border }]}>
+                          <Text style={[styles.attachmentText, { color: colors.subText }]}>attachment_file.png</Text>
                         </View>
                         <Image source={{ uri: m.imageUrl }} style={styles.bubbleImage} resizeMode="cover" />
                       </View>
@@ -660,12 +703,12 @@ export const ChatScreen: React.FC = () => {
                   </View>
                 ) : (
                   <View style={styles.aiMessageWrapper}>
-                    <View style={styles.bubbleAI}>
-                      <Text style={styles.bubbleAIText}>{m.text}</Text>
+                    <View style={[styles.bubbleAI, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.bubbleAIText, { color: colors.text }]}>{m.text}</Text>
                       {m.imageUrl && (
-                        <View style={[styles.bubbleImageContainer, { borderColor: '#2d555a', backgroundColor: '#183235' }]}>
-                          <View style={[styles.attachmentHeader, { borderBottomColor: '#2d555a' }]}>
-                            <Text style={[styles.attachmentText, { color: '#7ea0a4' }]}>scan_preview.png</Text>
+                        <View style={[styles.bubbleImageContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                          <View style={[styles.attachmentHeader, { borderBottomColor: colors.border }]}>
+                            <Text style={[styles.attachmentText, { color: colors.subText }]}>scan_preview.png</Text>
                           </View>
                           <Image source={{ uri: m.imageUrl }} style={styles.bubbleImage} resizeMode="cover" />
                         </View>
@@ -1166,19 +1209,19 @@ export const ChatScreen: React.FC = () => {
         </ScrollView>
 
         {/* COMBINED SCANNER & TEXT INPUT BAR */}
-        <View style={styles.inputBarContainer}>
-          <View style={styles.inputForm}>
+        <View style={[styles.inputBarContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+          <View style={[styles.inputForm, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
             <View style={styles.scannerActions}>
               {/* Receipt Scan mock button */}
-              <TouchableOpacity onPress={() => handleMockScan('receipt')} style={styles.scanBtn}>
+              <TouchableOpacity onPress={handleCameraPress} style={styles.scanBtn}>
                 <CameraIcon color="#10b981" size={16} />
               </TouchableOpacity>
             </View>
 
             <TextInput
-              style={styles.inputText}
+              style={[styles.inputText, { color: colors.text }]}
               placeholder="Type or describe transaction..."
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.subText}
               value={inputText}
               onChangeText={setInputText}
               onSubmitEditing={handleSend}
@@ -1187,10 +1230,10 @@ export const ChatScreen: React.FC = () => {
 
             <TouchableOpacity
               onPress={handleSend}
-              style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+              style={[styles.sendBtn, !inputText.trim() && { backgroundColor: colors.border }, inputText.trim() && { backgroundColor: '#10b981' }]}
               disabled={loading || !inputText.trim()}
             >
-              <SendIcon color={inputText.trim() ? '#122325' : '#71717a'} size={14} />
+              <SendIcon color={inputText.trim() ? '#122325' : colors.subText} size={14} />
             </TouchableOpacity>
           </View>
 
@@ -1203,36 +1246,8 @@ export const ChatScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* CUSTOM BOTTOM NAVIGATION BAR */}
-        <View style={styles.bottomTabBar}>
-          {/* Dashboard Tab */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Dashboard')}
-            style={styles.tabBtn}
-          >
-            <HomeIcon color="#94a3b8" size={18} />
-            <Text style={styles.tabText}>Home</Text>
-          </TouchableOpacity>
-
-          {/* AI Chat Tab (Highlight) */}
-          <View style={styles.centerTabWrapper}>
-            <TouchableOpacity
-              onPress={() => scrollViewRef.current?.scrollTo({ y: 0, animated: true })}
-              style={styles.centerTabBtn}
-            >
-              <SparklesIcon color="#ffffff" size={20} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Hub Tab */}
-          <TouchableOpacity
-            onPress={handleHubPress}
-            style={styles.tabBtn}
-          >
-            <ShieldIcon color="#a78bfa" size={18} />
-            <Text style={styles.tabText}>Hub</Text>
-          </TouchableOpacity>
-        </View>
+        {/* MODULAR BOTTOM TAB BAR */}
+        <BottomTabBar activeTab="Chat" />
 
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1242,7 +1257,9 @@ export const ChatScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#122325',
+  },
+  scrollView: {
+    flex: 1,
   },
   keyboardContainer: {
     flex: 1,
@@ -1293,7 +1310,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 150,
+    paddingBottom: 24,
   },
   msgContainer: {
     marginBottom: 16,
@@ -1760,10 +1777,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    position: 'absolute',
-    bottom: 56, // Leave room for bottom nav
-    left: 0,
-    right: 0,
   },
   inputForm: {
     flexDirection: 'row',

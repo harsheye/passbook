@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Passbook Mobile",
-    "slug": "passbook-mobile",
+    "name": "Salt Mobile",
+    "slug": "salt-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -12,7 +12,7 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.passbook.mobile"
+      "package": "com.salt.mobile"
     },
     "plugins": [
       "@react-native-community/datetimepicker"

@@ -51,7 +51,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 
         {/* CORE CONTENT ROUTER PORTAL */}
-        <div className={`flex-1 ${isActive('/') ? 'overflow-hidden h-full' : 'overflow-y-auto px-4 py-4 pb-20'}`}>
+        <div className={`flex-1 ${
+          isActive('/') || isActive('/dashboard') || isActive('/transactions') || isActive('/schedules') || isActive('/profile')
+            ? 'overflow-hidden h-full'
+            : 'overflow-y-auto px-4 py-4 pb-20'
+        }`}>
           {children}
         </div>
 

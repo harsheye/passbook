@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
   Search,
@@ -188,6 +189,7 @@ const CustomDatePicker: React.FC<{
 };
 
 export const Transactions: React.FC = () => {
+  const routerLocation = useLocation();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -239,7 +241,9 @@ export const Transactions: React.FC = () => {
   const [modalPmDropdownOpen, setModalPmDropdownOpen] = useState(false);
 
   const fetchTransactions = async () => {
-    setLoading(true);
+    if (transactions.length === 0) {
+      setLoading(true);
+    }
     try {
       const res = await axios.get('/api/transactions', {
         params: { search, type, category, quickFilter, sortBy, sortOrder }
@@ -253,9 +257,11 @@ export const Transactions: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchTransactions();
+    if (routerLocation.pathname === '/transactions') {
+      fetchTransactions();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, type, category, quickFilter, sortBy, sortOrder]);
+  }, [routerLocation.pathname, search, type, category, quickFilter, sortBy, sortOrder]);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -477,6 +483,114 @@ export const Transactions: React.FC = () => {
     setSplitTransaction('');
     setFavorite(false);
     setIsDirty(false);
+  };
+
+  const renderTransactionTile = (t: Transaction, showFullDate: boolean) => {
+    const isExpense = t.amount < 0;
+    const isSelected = selectedIds.includes(t.id);
+    const dateVal = t.transactionDate || (t as any).date;
+    const catObj = t.category || { name: 'Miscellaneous', color: '#6b7280' };
+
+    const tType = (t.transactionType || 'Expense').toUpperCase();
+    const colorClasses = tType === 'INCOME'
+      ? (isSelected 
+          ? 'bg-emerald-50/40 dark:bg-emerald-950/25 border-emerald-500 text-emerald-950 dark:text-emerald-200' 
+          : 'bg-emerald-50/15 dark:bg-emerald-950/10 border-emerald-100/70 dark:border-emerald-900/20 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 text-emerald-950 dark:text-emerald-200')
+      : tType === 'TRANSFER'
+      ? (isSelected 
+          ? 'bg-slate-100 dark:bg-zinc-900 border-slate-550 text-slate-800 dark:text-slate-200' 
+          : 'bg-slate-50 dark:bg-zinc-950/45 border-slate-200 dark:border-zinc-900 hover:bg-slate-100/50 dark:hover:bg-zinc-900/30 text-slate-800 dark:text-slate-200')
+      : (isSelected 
+          ? 'bg-rose-50/40 dark:bg-rose-950/25 border-rose-500 text-rose-950 dark:text-rose-200' 
+          : 'bg-rose-50/15 dark:bg-rose-950/10 border-rose-100/70 dark:border-rose-900/20 hover:bg-rose-50/30 dark:hover:bg-rose-950/20 text-rose-950 dark:text-rose-200');
+
+    const formattedTime = dateVal ? new Date(dateVal).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+    const formattedDate = dateVal ? new Date(dateVal).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '';
+    const dateDisplay = showFullDate ? `${formattedDate}, ${formattedTime}` : formattedTime;
+
+    return (
+      <div
+        key={t.id}
+        className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all select-none ${colorClasses}`}
+      >
+        <div className="flex items-center space-x-3 min-w-0 flex-1">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => handleCheckboxChange(t.id)}
+            className="cursor-pointer rounded border-slate-300 dark:border-slate-700 text-black focus:ring-black"
+          />
+          <div className="min-w-0 flex-1 pr-2">
+            <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
+              <span className="text-[8.5px] font-extrabold text-slate-455 uppercase shrink-0">
+                {dateDisplay}
+              </span>
+              <span
+                className="inline-block px-1.5 py-0.5 rounded text-[7.5px] font-bold uppercase shrink-0"
+                style={{ backgroundColor: `${catObj.color}15`, color: catObj.color }}
+              >
+                {catObj.name}
+              </span>
+              {t.merchantName && (
+                <span className="text-[8px] font-black text-indigo-400 uppercase truncate">
+                  @{t.merchantName}
+                </span>
+              )}
+            </div>
+            <h4 className="font-extrabold text-xs text-slate-800 dark:text-slate-200 mt-1 truncate max-w-[150px]">
+              {t.description}
+            </h4>
+            {(() => {
+              const { items: listItems } = parseItemsFromNotes(t.note || '');
+              if (listItems.length === 0) return null;
+              return (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {listItems.map((item, idx) => (
+                    <span
+                      key={idx}
+                      className="px-1 py-0.5 rounded text-[8px] bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 font-medium"
+                    >
+                      {item.name}: ₹{item.price}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-3 shrink-0">
+          <span className={`font-black text-xs font-sans ${isExpense ? 'text-rose-500' : 'text-emerald-500'}`}>
+            {isExpense ? '-' : '+'}₹{Math.abs(t.amount).toLocaleString('en-IN')}
+          </span>
+          
+          {/* Actions buttons drawer */}
+          <div className="flex space-x-0.5 border border-slate-200 dark:border-slate-855 rounded-lg p-0.5 bg-white dark:bg-black shrink-0">
+            <button
+              onClick={() => handleEdit(t)}
+              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-black dark:hover:text-white"
+              title="Edit"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => handleDuplicate(t)}
+              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-black dark:hover:text-white"
+              title="Duplicate"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => handleDelete(t.id)}
+              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-rose-500"
+              title="Delete"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -708,161 +822,61 @@ export const Transactions: React.FC = () => {
       ) : (
         <div className="space-y-5">
           {(() => {
-            // Group transactions by date string
-            const grouped: { [key: string]: Transaction[] } = {};
-            
-            // First, sort all transactions by date descending
-            const sortedTxns = [...transactions].sort((a, b) => {
-              const dateA = new Date(a.transactionDate || (a as any).date || 0).getTime();
-              const dateB = new Date(b.transactionDate || (b as any).date || 0).getTime();
-              return dateB - dateA;
-            });
+            if (sortBy === 'date') {
+              // Group transactions sequentially by date, preserving backend sorted order
+              const groups: { dateStr: string; list: Transaction[] }[] = [];
+              transactions.forEach(t => {
+                const dateVal = t.transactionDate || (t as any).date;
+                const dateStr = dateVal 
+                  ? new Date(dateVal).toISOString().split('T')[0] 
+                  : 'no-date';
+                
+                let lastGroup = groups[groups.length - 1];
+                if (lastGroup && lastGroup.dateStr === dateStr) {
+                  lastGroup.list.push(t);
+                } else {
+                  groups.push({ dateStr, list: [t] });
+                }
+              });
 
-            sortedTxns.forEach(t => {
-              const dateVal = t.transactionDate || (t as any).date;
-              // Format key as YYYY-MM-DD
-              const dKey = dateVal 
-                ? new Date(dateVal).toISOString().split('T')[0] 
-                : 'no-date';
-              if (!grouped[dKey]) {
-                grouped[dKey] = [];
-              }
-              grouped[dKey].push(t);
-            });
+              return groups.map(({ dateStr, list }) => {
+                const formattedDate = dateStr === 'no-date'
+                  ? 'No Date Specified'
+                  : new Date(dateStr).toLocaleDateString('en-IN', {
+                      weekday: 'long',
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    });
 
-            // Map each date group
-            return Object.entries(grouped).map(([dateStr, list]) => {
-              const formattedDate = dateStr === 'no-date'
-                ? 'No Date Specified'
-                : new Date(dateStr).toLocaleDateString('en-IN', {
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: 'long',
-                    year: 'numeric'
-                  });
+                return (
+                  <div key={dateStr} className="space-y-2.5">
+                    {/* BEAUTIFUL LINE BREAK AND DATE HEADER */}
+                    <div className="flex items-center space-x-2 pt-3 pb-1 border-b border-slate-100 dark:border-zinc-900/60 select-none">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-[#2fb09b] dark:text-[#2fb09b]/80 shrink-0">
+                        {formattedDate}
+                      </span>
+                      <div className="h-[1px] bg-slate-205 dark:bg-zinc-800/80 flex-1" />
+                      <span className="text-[8px] font-black uppercase text-slate-400 shrink-0">
+                        {list.length} {list.length === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
 
+                    {/* TRANSACTION TILES GROUP */}
+                    <div className="space-y-2.5">
+                      {list.map(t => renderTransactionTile(t, false))}
+                    </div>
+                  </div>
+                );
+              });
+            } else {
+              // Flat list of transactions when sorting by amount or description
               return (
-                <div key={dateStr} className="space-y-2.5">
-                  {/* BEAUTIFUL LINE BREAK AND DATE HEADER */}
-                  <div className="flex items-center space-x-2 pt-3 pb-1 border-b border-slate-100 dark:border-zinc-900/60 select-none">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-[#2fb09b] dark:text-[#2fb09b]/80 shrink-0">
-                      {formattedDate}
-                    </span>
-                    <div className="h-[1px] bg-slate-205 dark:bg-zinc-800/80 flex-1" />
-                    <span className="text-[8px] font-black uppercase text-slate-400 shrink-0">
-                      {list.length} {list.length === 1 ? 'item' : 'items'}
-                    </span>
-                  </div>
-
-                  {/* TRANSACTION TILES GROUP */}
-                  <div className="space-y-2.5">
-                    {list.map(t => {
-                      const isExpense = t.amount < 0;
-                      const isSelected = selectedIds.includes(t.id);
-                      const dateVal = t.transactionDate || (t as any).date;
-                      const catObj = t.category || { name: 'Miscellaneous', color: '#6b7280' };
-
-                      const tType = (t.transactionType || 'Expense').toUpperCase();
-                      const colorClasses = tType === 'INCOME'
-                        ? (isSelected 
-                            ? 'bg-emerald-50/40 dark:bg-emerald-950/25 border-emerald-500 text-emerald-950 dark:text-emerald-200' 
-                            : 'bg-emerald-50/15 dark:bg-emerald-950/10 border-emerald-100/70 dark:border-emerald-900/20 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/20 text-emerald-950 dark:text-emerald-200')
-                        : tType === 'TRANSFER'
-                        ? (isSelected 
-                            ? 'bg-slate-100 dark:bg-zinc-900 border-slate-550 text-slate-800 dark:text-slate-200' 
-                            : 'bg-slate-50 dark:bg-zinc-950/45 border-slate-200 dark:border-zinc-900 hover:bg-slate-100/50 dark:hover:bg-zinc-900/30 text-slate-800 dark:text-slate-200')
-                        : (isSelected 
-                            ? 'bg-rose-50/40 dark:bg-rose-950/25 border-rose-500 text-rose-950 dark:text-rose-200' 
-                            : 'bg-rose-50/15 dark:bg-rose-950/10 border-rose-100/70 dark:border-rose-900/20 hover:bg-rose-50/30 dark:hover:bg-rose-950/20 text-rose-950 dark:text-rose-200');
-
-                      return (
-                        <div
-                          key={t.id}
-                          className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all select-none ${colorClasses}`}
-                        >
-                          <div className="flex items-center space-x-3 min-w-0 flex-1">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleCheckboxChange(t.id)}
-                              className="cursor-pointer rounded border-slate-300 dark:border-slate-700 text-black focus:ring-black"
-                            />
-                            <div className="min-w-0 flex-1 pr-2">
-                              <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
-                                <span className="text-[8.5px] font-extrabold text-slate-450 uppercase shrink-0">
-                                  {dateVal ? new Date(dateVal).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
-                                </span>
-                                <span
-                                  className="inline-block px-1.5 py-0.5 rounded text-[7.5px] font-bold uppercase shrink-0"
-                                  style={{ backgroundColor: `${catObj.color}15`, color: catObj.color }}
-                                >
-                                  {catObj.name}
-                                </span>
-                                {t.merchantName && (
-                                  <span className="text-[8px] font-black text-indigo-400 uppercase truncate">
-                                    @{t.merchantName}
-                                  </span>
-                                )}
-                              </div>
-                              <h4 className="font-extrabold text-xs text-slate-800 dark:text-slate-200 mt-1 truncate max-w-[150px]">
-                                {t.description}
-                              </h4>
-                              {(() => {
-                                const { items: listItems } = parseItemsFromNotes(t.note || '');
-                                if (listItems.length === 0) return null;
-                                return (
-                                  <div className="mt-1 flex flex-wrap gap-1">
-                                    {listItems.map((item, idx) => (
-                                      <span
-                                        key={idx}
-                                        className="px-1 py-0.5 rounded text-[8px] bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 font-medium"
-                                      >
-                                        {item.name}: ₹{item.price}
-                                      </span>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center space-x-3 shrink-0">
-                            <span className={`font-black text-xs font-sans ${isExpense ? 'text-rose-500' : 'text-emerald-500'}`}>
-                              {isExpense ? '-' : '+'}₹{Math.abs(t.amount).toLocaleString('en-IN')}
-                            </span>
-                            
-                            {/* Actions buttons drawer */}
-                            <div className="flex space-x-0.5 border border-slate-200 dark:border-slate-855 rounded-lg p-0.5 bg-white dark:bg-black shrink-0">
-                              <button
-                                onClick={() => handleEdit(t)}
-                                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-450 hover:text-black dark:hover:text-white"
-                                title="Edit"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleDuplicate(t)}
-                                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-450 hover:text-black dark:hover:text-white"
-                                title="Duplicate"
-                              >
-                                <Copy className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(t.id)}
-                                className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-rose-500"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="space-y-2.5">
+                  {transactions.map(t => renderTransactionTile(t, true))}
                 </div>
               );
-            });
+            }
           })()}
         </div>
       )}

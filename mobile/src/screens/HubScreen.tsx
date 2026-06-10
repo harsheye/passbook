@@ -8,14 +8,34 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  Platform,
+  StatusBar,
+  BackHandler
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { fetchGamblingAnalyticsApi, GamblingSummary } from '../api/api';
 import { LockIcon, ShieldIcon, CheckIcon } from '../components/SvgIcons';
+import { useTheme } from '../context/ThemeContext';
 
 export const HubScreen: React.FC = () => {
   const navigation = useNavigation();
+  const { isDark, colors } = useTheme();
+
+  // Handle Android hardware back button
+  useEffect(() => {
+    const backAction = () => {
+      navigation.goBack();
+      return true; // prevent default behavior
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction
+    );
+
+    return () => backHandler.remove();
+  }, [navigation]);
 
   // Authentication states
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -38,7 +58,9 @@ export const HubScreen: React.FC = () => {
   };
 
   const loadAnalyticsData = async () => {
-    setLoading(true);
+    if (!analytics) {
+      setLoading(true);
+    }
     try {
       const data = await fetchGamblingAnalyticsApi();
       setAnalytics(data);
@@ -51,28 +73,28 @@ export const HubScreen: React.FC = () => {
 
   if (!isAuthenticated) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
         <View style={styles.lockContainer}>
-          <View style={styles.lockCard}>
+          <View style={[styles.lockCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.lockHeader}>
               <ShieldIcon color="#a78bfa" size={24} />
-              <Text style={styles.lockTitle}>HUB GATEWAY</Text>
+              <Text style={[styles.lockTitle, { color: colors.text }]}>HUB GATEWAY</Text>
             </View>
 
-            <Text style={styles.lockSub}>
+            <Text style={[styles.lockSub, { color: colors.subText }]}>
               This system contains restricted administrative audit controls. Please enter the master password to authorize this session.
             </Text>
 
             <View style={styles.passwordGroup}>
-              <View style={styles.passwordInputContainer}>
-                <LockIcon color="#71717a" size={14} />
+              <View style={[styles.passwordInputContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                <LockIcon color={colors.subText} size={14} />
                 <TextInput
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, { color: colors.text }]}
                   secureTextEntry
                   value={passwordInput}
                   onChangeText={setPasswordInput}
                   placeholder="Master Password..."
-                  placeholderTextColor="#71717a"
+                  placeholderTextColor={colors.subText}
                   onSubmitEditing={handleAuthenticate}
                 />
               </View>
@@ -82,16 +104,16 @@ export const HubScreen: React.FC = () => {
             <View style={styles.lockActions}>
               <TouchableOpacity
                 onPress={() => navigation.goBack()}
-                style={[styles.lockBtn, styles.lockBtnCancel]}
+                style={[styles.lockBtn, styles.lockBtnCancel, { borderColor: colors.border }]}
               >
-                <Text style={styles.lockBtnTextCancel}>Cancel</Text>
+                <Text style={[styles.lockBtnTextCancel, { color: colors.subText }]}>Cancel</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={handleAuthenticate}
-                style={[styles.lockBtn, styles.lockBtnAuth]}
+                style={[styles.lockBtn, styles.lockBtnAuth, { backgroundColor: colors.text, borderColor: colors.text }]}
               >
-                <Text style={styles.lockBtnTextAuth}>Authorize</Text>
+                <Text style={[styles.lockBtnTextAuth, { color: colors.background }]}>Authorize</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -101,28 +123,28 @@ export const HubScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         
         {/* HEADER SECTION */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View>
-            <Text style={styles.headerSub}>Consolidated audit log</Text>
-            <Text style={styles.headerTitle}>HUB SYSTEM</Text>
+            <Text style={[styles.headerSub, { color: colors.subText }]}>Consolidated audit log</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>HUB SYSTEM</Text>
           </View>
 
           <TouchableOpacity
             onPress={() => navigation.goBack()}
-            style={styles.closeBtn}
+            style={[styles.closeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
-            <Text style={styles.closeBtnText}>Close</Text>
+            <Text style={[styles.closeBtnText, { color: colors.text }]}>Close</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#a78bfa" />
-            <Text style={styles.loadingText}>Loading Hub systems...</Text>
+            <Text style={[styles.loadingText, { color: colors.subText }]}>Loading Hub systems...</Text>
           </View>
         ) : !analytics ? (
           <View style={styles.errorContainer}>
@@ -132,7 +154,7 @@ export const HubScreen: React.FC = () => {
           <ScrollView contentContainerStyle={styles.scrollContainer}>
             
             {/* NET WORTH HEADER PANEL */}
-            <View style={styles.netWorthCard}>
+            <View style={[styles.netWorthCard, { backgroundColor: '#a78bfa' }]}>
               <View style={styles.netWorthRow}>
                 <ShieldIcon color="#000000" size={14} />
                 <Text style={styles.netWorthSub}>System consolidated status</Text>
@@ -145,20 +167,20 @@ export const HubScreen: React.FC = () => {
 
             {/* Platform Metrics details cards */}
             <View style={styles.metricsGrid}>
-              <View style={styles.metricsCard}>
-                <Text style={styles.metricsLabel}>TOTAL DEPOSITS</Text>
-                <Text style={styles.metricsValue}>₹{analytics.summary.totalDeposits.toLocaleString('en-IN')}</Text>
+              <View style={[styles.metricsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.metricsLabel, { color: colors.subText }]}>TOTAL DEPOSITS</Text>
+                <Text style={[styles.metricsValue, { color: colors.text }]}>₹{analytics.summary.totalDeposits.toLocaleString('en-IN')}</Text>
               </View>
 
-              <View style={styles.metricsCard}>
-                <Text style={styles.metricsLabel}>WITHDRAWALS</Text>
-                <Text style={styles.metricsValue}>₹{analytics.summary.totalWithdrawals.toLocaleString('en-IN')}</Text>
+              <View style={[styles.metricsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.metricsLabel, { color: colors.subText }]}>WITHDRAWALS</Text>
+                <Text style={[styles.metricsValue, { color: colors.text }]}>₹{analytics.summary.totalWithdrawals.toLocaleString('en-IN')}</Text>
               </View>
             </View>
 
             {/* ROI Profit card */}
-            <View style={styles.roiCard}>
-              <Text style={styles.roiLabel}>SYSTEM ROI NET PROFIT</Text>
+            <View style={[styles.roiCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.roiLabel, { color: colors.subText }]}>SYSTEM ROI NET PROFIT</Text>
               <View style={styles.roiRow}>
                 <Text style={[styles.roiValue, analytics.summary.netProfit >= 0 ? styles.positiveText : styles.negativeText]}>
                   ₹{analytics.summary.netProfit.toLocaleString('en-IN')}
@@ -172,23 +194,23 @@ export const HubScreen: React.FC = () => {
             </View>
 
             {/* Platforms list */}
-            <View style={styles.summaryBox}>
-              <Text style={styles.summaryBoxTitle}>Platform Ledger details</Text>
+            <View style={[styles.summaryBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.summaryBoxTitle, { color: colors.text }]}>Platform Ledger details</Text>
               
               <View style={styles.ledgerRow}>
-                <Text style={styles.ledgerLabel}>Total Bookkeeping Bets Placed</Text>
-                <Text style={styles.ledgerValue}>{analytics.summary.totalBets}</Text>
+                <Text style={[styles.ledgerLabel, { color: colors.subText }]}>Total Bookkeeping Bets Placed</Text>
+                <Text style={[styles.ledgerValue, { color: colors.text }]}>{analytics.summary.totalBets}</Text>
               </View>
-              <View style={styles.ledgerDivider} />
+              <View style={[styles.ledgerDivider, { backgroundColor: colors.border }]} />
               
               <View style={styles.ledgerRow}>
-                <Text style={styles.ledgerLabel}>Winning Book Bets Count</Text>
+                <Text style={[styles.ledgerLabel, { color: colors.subText }]}>Winning Book Bets Count</Text>
                 <Text style={[styles.ledgerValue, styles.positiveText]}>{analytics.summary.totalWins}</Text>
               </View>
-              <View style={styles.ledgerDivider} />
+              <View style={[styles.ledgerDivider, { backgroundColor: colors.border }]} />
 
               <View style={styles.ledgerRow}>
-                <Text style={styles.ledgerLabel}>Losing Book Bets Count</Text>
+                <Text style={[styles.ledgerLabel, { color: colors.subText }]}>Losing Book Bets Count</Text>
                 <Text style={[styles.ledgerValue, styles.negativeText]}>{analytics.summary.totalLosses}</Text>
               </View>
             </View>
@@ -204,7 +226,6 @@ export const HubScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#09090b',
   },
   lockContainer: {
     flex: 1,

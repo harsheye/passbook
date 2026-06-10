@@ -272,39 +272,47 @@ export class DashboardController {
         }
       });
 
-      // 2. Gambling Bookkeeping Aggregations
-      const gamblingEntries = await prisma.gamblingEntry.findMany({ where: { userId } });
-      const gamblingPlatforms = await prisma.gamblingPlatform.findMany({ where: { userId } });
+      // 2. Gambling Bookkeeping Aggregations (Only for admins)
+      const isAdmin = req.user!.role === 'ADMIN';
 
       let totalDeposits = 0;
       let totalWithdrawals = 0;
       let totalBonuses = 0;
       let currentPlatformBalance = 0;
+      let gamblingProfit = 0;
 
-      gamblingEntries.forEach(e => {
-        const type = e.transactionType.toUpperCase();
-        if (type === 'DEPOSIT') totalDeposits += e.amount;
-        else if (type === 'WITHDRAWAL') totalWithdrawals += e.amount;
-        else if (type === 'BONUS') totalBonuses += e.amount;
-      });
+      if (isAdmin) {
+        const gamblingEntries = await prisma.gamblingEntry.findMany({ where: { userId } });
+        const gamblingPlatforms = await prisma.gamblingPlatform.findMany({ where: { userId } });
 
-      gamblingPlatforms.forEach(p => {
-        if (p.status === 'ACTIVE') {
-          currentPlatformBalance += p.balance;
-        }
-      });
+        gamblingEntries.forEach(e => {
+          const type = e.transactionType.toUpperCase();
+          if (type === 'DEPOSIT') totalDeposits += e.amount;
+          else if (type === 'WITHDRAWAL') totalWithdrawals += e.amount;
+          else if (type === 'BONUS') totalBonuses += e.amount;
+        });
 
-      // Net Gambling Profit = (Withdrawals + Platform Balance + Bonuses) - Deposits
-      const gamblingProfit = (totalWithdrawals + currentPlatformBalance + totalBonuses) - totalDeposits;
+        gamblingPlatforms.forEach(p => {
+          if (p.status === 'ACTIVE') {
+            currentPlatformBalance += p.balance;
+          }
+        });
+
+        // Net Gambling Profit = (Withdrawals + Platform Balance + Bonuses) - Deposits
+        gamblingProfit = (totalWithdrawals + currentPlatformBalance + totalBonuses) - totalDeposits;
+      }
 
       // 3. Combined Financial Net Worth formulas
       const netWorth = totalIncome + totalInvestments + gamblingProfit - totalExpenses;
 
       const assetBalances = [
         { name: 'Liquid Cash / Banks', value: Math.max(0, totalIncome - totalExpenses - totalInvestments - totalDeposits + totalWithdrawals) },
-        { name: 'Investments Portfolio', value: totalInvestments },
-        { name: 'Gambling Platform Ledgers', value: currentPlatformBalance }
+        { name: 'Investments Portfolio', value: totalInvestments }
       ];
+
+      if (isAdmin) {
+        assetBalances.push({ name: 'Gambling Platform Ledgers', value: currentPlatformBalance });
+      }
 
       return res.json({
         metrics: {
@@ -315,11 +323,11 @@ export class DashboardController {
           netWorth
         },
         assetBalances,
-        gamblingMeta: {
+        gamblingMeta: isAdmin ? {
           currentBalance: currentPlatformBalance,
           deposits: totalDeposits,
           withdrawals: totalWithdrawals
-        }
+        } : null
       });
     } catch (error: any) {
       return res.status(500).json({ error: error.message });

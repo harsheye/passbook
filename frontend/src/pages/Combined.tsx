@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -42,6 +42,7 @@ const MONO_COLORS = ['#000000', '#475569', '#94a3b8'];
 
 export const Combined: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout } = useAuth(); // Let's import useAuth directly
   const [summary, setSummary] = useState<CombinedSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +54,9 @@ export const Combined: React.FC = () => {
 
   useEffect(() => {
     const fetchCombined = async () => {
+      if (!summary) {
+        setLoading(true);
+      }
       try {
         const res = await axios.get('/api/dashboard/admin-summary');
         setSummary(res.data);
@@ -62,8 +66,11 @@ export const Combined: React.FC = () => {
         setLoading(false);
       }
     };
-    fetchCombined();
-  }, []);
+
+    if (location.pathname === '/profile') {
+      fetchCombined();
+    }
+  }, [location.pathname]);
 
   if (loading) {
     return (
@@ -104,6 +111,13 @@ export const Combined: React.FC = () => {
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+          <button
+            onClick={logout}
+            className="p-1.5 hover:bg-slate-50 dark:hover:bg-rose-950/20 text-rose-500 rounded-lg border border-rose-200 dark:border-rose-900/50 cursor-pointer"
+            title="Log Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -117,7 +131,7 @@ export const Combined: React.FC = () => {
           ₹{metrics.netWorth.toLocaleString('en-IN')}
         </h3>
         <p className="text-[8px] text-slate-400 dark:text-slate-500 font-semibold uppercase leading-normal pt-1.5 border-t border-white/10 dark:border-black/10">
-          Net Worth = Cash + Investments + Bets - Expense
+          Net Worth = Cash + Investments {auth.user?.role === 'ADMIN' ? '+ Bets ' : ''}- Expense
         </p>
       </div>
 
@@ -167,20 +181,22 @@ export const Combined: React.FC = () => {
         </div>
 
         {/* Gambling Profit Card */}
-        <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-3 border border-slate-150 dark:border-slate-900 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-white dark:bg-black border dark:border-slate-800 rounded-xl text-black dark:text-white">
-              <Coins className="w-4.5 h-4.5" />
+        {auth.user?.role === 'ADMIN' && (
+          <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-3 border border-slate-150 dark:border-slate-900 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-white dark:bg-black border dark:border-slate-800 rounded-xl text-black dark:text-white">
+                <Coins className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <span className="text-[8px] uppercase font-black text-slate-400">Betting Ledger Winnings</span>
+                <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">Gambling Net</h4>
+              </div>
             </div>
-            <div>
-              <span className="text-[8px] uppercase font-black text-slate-400">Betting Ledger Winnings</span>
-              <h4 className="text-xs font-extrabold text-slate-800 dark:text-slate-200">Gambling Net</h4>
-            </div>
+            <span className={`font-black text-xs font-sans ${metrics.gamblingProfit >= 0 ? 'text-black dark:text-white' : 'text-rose-500'}`}>
+              ₹{metrics.gamblingProfit.toLocaleString('en-IN')}
+            </span>
           </div>
-          <span className={`font-black text-xs font-sans ${metrics.gamblingProfit >= 0 ? 'text-black dark:text-white' : 'text-rose-500'}`}>
-            ₹{metrics.gamblingProfit.toLocaleString('en-IN')}
-          </span>
-        </div>
+        )}
       </div>
 
       {/* SEGMENT ALLOCATION CHART */}
@@ -252,27 +268,29 @@ export const Combined: React.FC = () => {
       <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-3xl border border-slate-200 dark:border-slate-900 space-y-3">
         <span className="text-[8px] uppercase font-black text-slate-400 tracking-wider">Quick Shortcuts Actions</span>
         
-        <div className="grid grid-cols-2 gap-3 text-[10px] font-extrabold uppercase">
+        <div className={`${auth.user?.role === 'ADMIN' ? 'grid grid-cols-2' : 'flex'} gap-3 text-[10px] font-extrabold uppercase`}>
           <a
             href="/import"
             onClick={(e) => { e.preventDefault(); navigate('/import'); }}
-            className="p-3 border border-slate-200 dark:border-slate-900 bg-white dark:bg-black rounded-xl text-center shadow-sm hover:scale-105 transition-transform"
+            className={`p-3 border border-slate-200 dark:border-slate-900 bg-white dark:bg-black rounded-xl text-center shadow-sm hover:scale-105 transition-transform ${auth.user?.role !== 'ADMIN' ? 'w-full' : ''}`}
           >
             📂 Import Data
           </a>
-          <button
-            onClick={() => {
-              const pass = window.prompt('Enter Admin Password to access Hub:');
-              if (pass === 'admin123') {
-                navigate('/admin/gambling');
-              } else if (pass !== null) {
-                alert('Incorrect Admin Password.');
-              }
-            }}
-            className="p-3 border border-slate-200 dark:border-slate-900 bg-white dark:bg-black rounded-xl text-center shadow-sm hover:scale-105 transition-transform font-extrabold uppercase text-[10px] text-black dark:text-white cursor-pointer"
-          >
-            🎰 Hub
-          </button>
+          {auth.user?.role === 'ADMIN' && (
+            <button
+              onClick={() => {
+                const pass = window.prompt('Enter Admin Password to access Hub:');
+                if (pass === 'admin123') {
+                  navigate('/admin/gambling');
+                } else if (pass !== null) {
+                  alert('Incorrect Admin Password.');
+                }
+              }}
+              className="p-3 border border-slate-200 dark:border-slate-900 bg-white dark:bg-black rounded-xl text-center shadow-sm hover:scale-105 transition-transform font-extrabold uppercase text-[10px] text-black dark:text-white cursor-pointer"
+            >
+              🎰 Hub
+            </button>
+          )}
         </div>
       </div>
     </div>

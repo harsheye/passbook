@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Layout } from './components/Layout';
@@ -10,6 +10,36 @@ import { Schedules } from './pages/Schedules';
 import { Gambling } from './pages/Gambling';
 import { Combined } from './pages/Combined';
 import { Chat } from './pages/Chat';
+import { Login } from './pages/Login';
+
+// ----------------------------------------------------
+// MAIN TABBED APP CONTAINER (Preserves screen state across tabs)
+// ----------------------------------------------------
+
+const MainTabApp: React.FC = () => {
+  const location = useLocation();
+  const isActive = (path: string) => location.pathname === path;
+
+  return (
+    <>
+      <div className={isActive('/') ? 'h-full overflow-hidden' : 'hidden'}>
+        <Chat />
+      </div>
+      <div className={isActive('/dashboard') ? 'h-full overflow-y-auto px-4 py-4 pb-20' : 'hidden'}>
+        <Dashboard />
+      </div>
+      <div className={isActive('/transactions') ? 'h-full overflow-y-auto px-4 py-4 pb-20' : 'hidden'}>
+        <Transactions />
+      </div>
+      <div className={isActive('/schedules') ? 'h-full overflow-y-auto px-4 py-4 pb-20' : 'hidden'}>
+        <Schedules />
+      </div>
+      <div className={isActive('/profile') ? 'h-full overflow-y-auto px-4 py-4 pb-20' : 'hidden'}>
+        <Combined />
+      </div>
+    </>
+  );
+};
 
 // ----------------------------------------------------
 // ROUTING SECURITY GUARDS
@@ -31,7 +61,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <Layout>{children}</Layout>;
+  return <>{children}</>;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -51,7 +81,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <Navigate to="/" replace />;
   }
 
-  return <Layout>{children}</Layout>;
+  return <>{children}</>;
 };
 
 // ----------------------------------------------------
@@ -63,68 +93,36 @@ const AppContent: React.FC = () => {
     <Router>
       <Routes>
         
-        {/* PUBLIC ACCESS CHANNELS REMOVED (LOCAL BYPASS) */}
-        <Route path="/login" element={<Navigate to="/" replace />} />
+        {/* PUBLIC ACCESS CHANNELS */}
+        <Route path="/login" element={<Login />} />
 
-        {/* PROTECTED ACCOUNT CHANNELS */}
+        {/* PROTECTED ACCOUNT CHANNELS WITH LAYOUT WRAPPER */}
         <Route
-          path="/"
           element={
             <ProtectedRoute>
-              <Chat />
+              <Layout>
+                <Outlet />
+              </Layout>
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/transactions"
-          element={
-            <ProtectedRoute>
-              <Transactions />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/import"
-          element={
-            <ProtectedRoute>
-              <Import />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/schedules"
-          element={
-            <ProtectedRoute>
-              <Schedules />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* STRICT ADMIN RESTRICTED PANELS */}
-        <Route
-          path="/admin/gambling"
-          element={
-            <AdminRoute>
-              <Gambling />
-            </AdminRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Combined />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route path="/" element={<MainTabApp />} />
+          <Route path="/dashboard" element={<MainTabApp />} />
+          <Route path="/transactions" element={<MainTabApp />} />
+          <Route path="/schedules" element={<MainTabApp />} />
+          <Route path="/profile" element={<MainTabApp />} />
+          <Route path="/import" element={<Import />} />
+          
+          {/* STRICT ADMIN RESTRICTED PANELS */}
+          <Route
+            path="/admin/gambling"
+            element={
+              <AdminRoute>
+                <Gambling />
+              </AdminRoute>
+            }
+          />
+        </Route>
 
         {/* ROOT FALLBACK REDIRECTS */}
         <Route path="*" element={<Navigate to="/" replace />} />
