@@ -11,6 +11,8 @@ import { Gambling } from './pages/Gambling';
 import { Combined } from './pages/Combined';
 import { Chat } from './pages/Chat';
 import { Login } from './pages/Login';
+import { Gst } from './pages/Gst';
+import { Tax } from './pages/Tax';
 
 // ----------------------------------------------------
 // MAIN TABBED APP CONTAINER (Preserves screen state across tabs)
@@ -112,6 +114,8 @@ const AppContent: React.FC = () => {
           <Route path="/schedules" element={<MainTabApp />} />
           <Route path="/profile" element={<MainTabApp />} />
           <Route path="/import" element={<Import />} />
+          <Route path="/gst" element={<Gst />} />
+          <Route path="/tax" element={<Tax />} />
           
           {/* STRICT ADMIN RESTRICTED PANELS */}
           <Route

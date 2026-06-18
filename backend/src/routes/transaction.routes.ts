@@ -18,6 +18,7 @@ router.delete('/', TransactionController.bulkDelete);
 
 // Import endpoints
 router.post('/upload', upload.single('file'), TransactionController.uploadFile);
+router.post('/ocr', upload.single('file'), TransactionController.ocrScan);
 router.post('/import-validate', TransactionController.validateImport);
 router.post('/import', TransactionController.finalizeImport);
 

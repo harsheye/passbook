@@ -318,8 +318,12 @@ export class TransactionController {
       const simulatedTransactions = [];
 
       for (const pt of parsedTransactions) {
-        const categoryName = pt.category || 'Miscellaneous';
         const type = pt.type || 'Expense';
+        const rawCategory = pt.category || 'Miscellaneous';
+        const categoryName = AIService.mapToStandardCategory(
+          rawCategory,
+          type.toUpperCase() === 'INCOME' ? 'INCOME' : 'EXPENSE'
+        );
         const signedAmt = type === 'Expense' ? -Math.abs(pt.amount) : Math.abs(pt.amount);
 
         simulatedTransactions.push({
@@ -671,6 +675,27 @@ export class TransactionController {
       }
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
+    }
+  }
+
+  /**
+   * Scan receipt image via Gemini OCR and return transaction data
+   */
+  public static async ocrScan(req: AuthenticatedRequest, res: Response) {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No receipt file uploaded' });
+      }
+
+      const base64Data = req.file.buffer.toString('base64');
+      const mimeType = req.file.mimetype;
+
+      const parsed = await AIService.parseReceiptImage(base64Data, mimeType);
+
+      return res.status(200).json(parsed);
+    } catch (error: any) {
+      console.error('[OCR Scan Failed]:', error);
+      return res.status(500).json({ error: error.message || 'Failed to parse receipt image' });
     }
   }
 }

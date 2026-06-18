@@ -64,7 +64,7 @@ interface ChatMessage {
   };
 }
 
-const CATEGORIES = [
+const EXPENSE_CATEGORIES = [
   'Beauty/Wellness',
   'Eating Out/Ordering In',
   'Entertainment',
@@ -82,7 +82,10 @@ const CATEGORIES = [
   'Skill Development',
   'Subscriptions',
   'Travel',
-  'Utilities/Bills',
+  'Utilities/Bills'
+];
+
+const INCOME_CATEGORIES = [
   'Salary',
   'Freelancing',
   'Business Income',
@@ -93,6 +96,43 @@ const CATEGORIES = [
   'Cashback',
   'Other Income'
 ];
+
+const CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
+
+const getCategoryEmoji = (category: string, type?: string) => {
+  if (type === 'Transfer') return '⇄';
+  const c = category.trim();
+  switch (c) {
+    case 'Salary': return '💰';
+    case 'Freelancing': return '💻';
+    case 'Business Income': return '🏢';
+    case 'Interest': return '📈';
+    case 'Investment Returns': return '📊';
+    case 'Bonus': return '🎁';
+    case 'Refund': return '↩️';
+    case 'Cashback': return '💸';
+    case 'Other Income': return '🪙';
+    case 'Beauty/Wellness': return '💅';
+    case 'Eating Out/Ordering In': return '🍔';
+    case 'Entertainment': return '🎬';
+    case 'Fitness/Sports': return '👟';
+    case 'Fuel': return '⛽';
+    case 'Gifts': return '💝';
+    case 'Groceries': return '🛒';
+    case 'Healthcare': return '🏥';
+    case 'Home Improvement': return '🏡';
+    case 'Loan/EMI Payments': return '💳';
+    case 'Miscellaneous': return '📦';
+    case 'Money Transfers': return '⇄';
+    case 'Rent': return '🔑';
+    case 'Shopping': return '🛍️';
+    case 'Skill Development': return '📚';
+    case 'Subscriptions': return '🔔';
+    case 'Travel': return '✈️';
+    case 'Utilities/Bills': return '⚡';
+    default: return '📦';
+  }
+};
 
 const CustomDatePicker: React.FC<{
   value: string;
@@ -504,6 +544,88 @@ export const Chat: React.FC = () => {
     }
   };
 
+  // Simulate receipt/item photo scan mock helper
+  const handleMockScan = (type: 'receipt' | 'item') => {
+    const userMsgId = `user_mock_${Date.now()}`;
+    const scanText = type === 'receipt' ? 'Uploaded receipt image for OCR scan' : 'Scanned single item photo';
+    const mockImgUrl = type === 'receipt' 
+      ? 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400' 
+      : 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400';
+    
+    const updatedMsgs: ChatMessage[] = [...messages, { id: userMsgId, sender: 'user' as const, text: scanText, imageUrl: mockImgUrl }];
+    setMessages(updatedMsgs);
+    setLoading(true);
+
+    setTimeout(() => {
+      const currentTime = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      
+      let customizerData;
+      let text = '';
+
+      if (type === 'receipt') {
+        const extractedItems = [
+          { name: 'HP EliteBook Laptop', price: 65000 },
+          { name: 'Wireless Ergonomic Mouse', price: 2500 },
+          { name: 'Type-C USB Charging Hub', price: 1800 }
+        ];
+        const sumTotal = extractedItems.reduce((acc, item) => acc + item.price, 0);
+        
+        text = 'OCR scan complete! I detected an office purchase. Customize and record the billing details below:';
+        customizerData = {
+          date: new Date().toISOString().split('T')[0],
+          time: currentTime,
+          description: 'HP EliteBook purchase',
+          amount: sumTotal,
+          category: 'Shopping',
+          subcategory: 'Electronics',
+          paymentMethod: 'Card',
+          account: 'HDFC',
+          type: 'Expense' as const,
+          merchantName: 'HP Hardware Store',
+          location: 'Tech Hub Park',
+          tags: 'electronics, laptop',
+          note: 'Office laptop workstation upgrade',
+          mood: 'Happy',
+          splitTransaction: '',
+          favorite: true,
+          items: extractedItems
+        };
+      } else {
+        text = 'Item recognized as **Nike Air Max Sneakers**! I have pre-filled standard ledger parameters. Confirm your details below:';
+        customizerData = {
+          date: new Date().toISOString().split('T')[0],
+          time: currentTime,
+          description: 'Nike Air Max Sneakers',
+          amount: 12500,
+          category: 'Shopping',
+          subcategory: 'General',
+          paymentMethod: 'UPI',
+          account: 'SBI',
+          type: 'Expense' as const,
+          merchantName: 'Nike Store',
+          location: 'City Mall',
+          tags: 'clothing, shoes',
+          note: 'Running shoes purchase',
+          mood: 'Neutral',
+          splitTransaction: '',
+          favorite: false,
+          items: [{ name: 'Nike Air Max Sneakers', price: 12500 }]
+        };
+      }
+
+      const aiMsg: ChatMessage = {
+        id: `ai_ocr_${Date.now()}`,
+        sender: 'ai' as const,
+        text,
+        customizer: customizerData,
+        imageUrl: mockImgUrl
+      };
+
+      setMessages([...updatedMsgs, aiMsg]);
+      setLoading(false);
+    }, 1200);
+  };
+
   // Update Customizer fields inline
   const handleUpdateCustomizerField = (msgId: string, key: string, value: any) => {
     setMessages(prev =>
@@ -701,6 +823,16 @@ export const Chat: React.FC = () => {
         })
       );
 
+      // Dispatch real-time sync event
+      window.dispatchEvent(new CustomEvent('transaction-updated'));
+      try {
+        const bc = new BroadcastChannel('transaction_updates');
+        bc.postMessage('updated');
+        bc.close();
+      } catch (bcErr) {
+        // ignore BroadcastChannel errors gracefully
+      }
+
     } catch (err) {
       alert('Save failed.');
     }
@@ -711,24 +843,24 @@ export const Chat: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#122325] text-white font-sans animate-fadeIn overflow-hidden select-none">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-zinc-50 font-sans animate-fadeIn overflow-hidden select-none">
       
       {/* 1. Styled Header Section */}
-      <div className="bg-[#183235] text-white px-4 py-3 shrink-0 rounded-b-[24px] shadow-md border-b border-[#1f4246]">
+      <div className="bg-white dark:bg-[#18181b] text-slate-900 dark:text-zinc-50 px-4 py-3 shrink-0 rounded-b-[24px] shadow-sm border-b border-slate-200 dark:border-zinc-800">
         {/* Top Navigation */}
         <div className="flex justify-between items-center">
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-[#1f4246] rounded-full transition">
-            <ArrowLeft className="w-5 h-5 text-white" />
+          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-900 rounded-full transition">
+            <ArrowLeft className="w-5 h-5 text-slate-700 dark:text-zinc-300" />
           </button>
           
-          <div className="flex items-center space-x-1.5 cursor-pointer hover:bg-[#1f4246] px-3 py-1 rounded-full transition">
+          <div className="flex items-center space-x-1.5 cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 px-3 py-1 rounded-full transition">
             <span className="w-2.5 h-2.5 rounded-full bg-[#2fb09b] animate-pulse"></span>
-            <span className="text-[12px] font-black uppercase tracking-wider text-slate-100">Passbook AI</span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-350" />
+            <span className="text-[12px] font-black uppercase tracking-wider text-slate-800 dark:text-zinc-200">Passbook AI</span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </div>
 
-          <button onClick={() => navigate('/')} className="p-1.5 hover:bg-[#1f4246] rounded-full transition">
-            <Home className="w-5 h-5 text-white" />
+          <button onClick={() => navigate('/')} className="p-1.5 hover:bg-slate-100 dark:hover:bg-zinc-900 rounded-full transition">
+            <Home className="w-5 h-5 text-slate-700 dark:text-zinc-300" />
           </button>
         </div>
       </div>
@@ -745,13 +877,13 @@ export const Chat: React.FC = () => {
               key={m.id}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} space-y-1 animate-slideUp`}
             >
-              <span className="text-[8.5px] uppercase font-black tracking-wider text-[#7ea0a4] px-1 select-none">
+              <span className="text-[8.5px] uppercase font-black tracking-wider text-slate-400 dark:text-zinc-500 px-1 select-none">
                 {isUser ? 'You' : 'Passbook Assistant'}
               </span>
               
               {isUser ? (
                 /* User Chat Bubble */
-                <div className="max-w-[85%] bg-white text-[#122325] p-3.5 rounded-2xl rounded-tr-none text-[11px] font-bold shadow-md leading-relaxed">
+                <div className="max-w-[85%] bg-white dark:bg-zinc-800 text-slate-900 dark:text-zinc-50 border border-slate-200 dark:border-zinc-700 p-3.5 rounded-2xl rounded-tr-none text-[11px] font-bold shadow-sm leading-relaxed">
                   <p>{m.text}</p>
                   
                   {m.imageUrl && (
@@ -760,7 +892,7 @@ export const Chat: React.FC = () => {
                         <FileImage className="w-3.5 h-3.5 text-[#2fb09b]" />
                         <span>attachment_file.png</span>
                       </div>
-                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm max-w-[220px]">
+                      <div className="border border-slate-200 dark:border-zinc-700 rounded-xl overflow-hidden shadow-sm max-w-[220px]">
                         <img src={m.imageUrl} alt="Attachment" className="w-full h-auto object-cover max-h-36" />
                       </div>
                     </div>
@@ -770,16 +902,16 @@ export const Chat: React.FC = () => {
                 /* AI Response Bubble / Layout */
                 <div className="max-w-[90%] space-y-2">
                   {/* Assistant Text Bubble */}
-                  <div className="bg-[#183235] text-slate-100 p-3.5 rounded-2xl rounded-tl-none text-[11px] font-bold border border-[#224448] shadow-md leading-relaxed">
+                  <div className="bg-slate-100 dark:bg-zinc-900 text-slate-800 dark:text-zinc-205 p-3.5 rounded-2xl rounded-tl-none text-[11px] font-bold border border-slate-200 dark:border-zinc-800 shadow-sm leading-relaxed">
                     <p>{m.text}</p>
                     
                     {m.imageUrl && (
                       <div className="mt-2.5 space-y-1.5">
-                        <div className="flex items-center space-x-1.5 text-[8.5px] text-[#7ea0a4] font-extrabold uppercase">
-                          <FileImage className="w-3.5 h-3.5 text-sky-400" />
+                        <div className="flex items-center space-x-1.5 text-[8.5px] text-slate-400 dark:text-zinc-500 font-extrabold uppercase">
+                          <FileImage className="w-3.5 h-3.5 text-sky-500" />
                           <span>scan_preview.png</span>
                         </div>
-                        <div className="border border-[#2d555a] rounded-xl overflow-hidden shadow-sm max-w-[220px]">
+                        <div className="border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden shadow-sm max-w-[220px]">
                           <img src={m.imageUrl} alt="Attachment" className="w-full h-auto object-cover max-h-36" />
                         </div>
                       </div>
@@ -801,35 +933,35 @@ export const Chat: React.FC = () => {
                             )
                           );
                         }}
-                        className={`w-full max-w-[340px] bg-white text-[#122325] rounded-[20px] p-4 shadow-md flex items-center justify-between border-l-[5px] border-b-[5px] transition-all hover:scale-[1.02] duration-300 ${
+                        className={`w-full max-w-[340px] bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-zinc-50 rounded-[20px] p-4 shadow-md flex items-center justify-between border-l-[5px] border-b-[5px] transition-all hover:scale-[1.02] duration-300 ${
                           m.customizer.type === 'Income'
                             ? 'border-[#2fb09b]'
                             : m.customizer.type === 'Transfer'
-                            ? 'border-slate-800'
+                            ? 'border-slate-800 dark:border-zinc-700'
                             : 'border-[#f56565]'
                         }`}
                       >
                         <span className="flex items-center space-x-2.5">
                           {m.customizer.type === 'Income' ? (
-                            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                              <span className="text-[10px] text-emerald-600 font-black">↓</span>
+                            <div className="w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/20 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-black">↓</span>
                             </div>
                           ) : m.customizer.type === 'Transfer' ? (
-                            <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                              <span className="text-[10px] text-slate-600 font-black">⇄</span>
+                            <div className="w-5 h-5 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-black">⇄</span>
                             </div>
                           ) : (
-                            <div className="w-5 h-5 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                              <span className="text-[10px] text-rose-600 font-black">↑</span>
+                            <div className="w-5 h-5 rounded-full bg-rose-100 dark:bg-rose-950/20 flex items-center justify-center shrink-0">
+                              <span className="text-[10px] text-rose-600 dark:text-rose-400 font-black">↑</span>
                             </div>
                           )}
                           <div className="text-left">
-                            <div className="text-[10.5px] font-black text-slate-800">
+                            <div className="text-[10.5px] font-black text-slate-800 dark:text-zinc-200">
                               {m.customizer.type === 'Transfer'
                                 ? `₹${m.customizer.amount} Transferred`
                                 : `₹${m.customizer.amount} ${m.customizer.type}`}
                             </div>
-                            <div className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">
+                            <div className="text-[8px] font-bold text-slate-450 dark:text-zinc-500 uppercase tracking-wide">
                               {m.customizer.type === 'Transfer'
                                 ? `${m.customizer.account} ➔ ${m.customizer.subcategory}`
                                 : `${m.customizer.description || m.customizer.category}`}
@@ -840,25 +972,23 @@ export const Chat: React.FC = () => {
                       </button>
                     ) : (
                       /* Expanded Customizer Card (Identical Style to User Screenshot) */
-                      <div className={`relative w-full max-w-[340px] bg-white text-[#122325] rounded-[24px] p-5 shadow-xl space-y-4 animate-fadeIn border-l-[6px] border-b-[6px] ${
+                      <div className={`relative w-full max-w-[340px] bg-white dark:bg-[#18181b] border border-slate-205 dark:border-zinc-800 text-slate-900 dark:text-zinc-50 rounded-[24px] p-5 shadow-xl space-y-4 animate-fadeIn border-l-[6px] border-b-[6px] ${
                         m.customizer.type === 'Income'
                           ? 'border-[#2fb09b]'
                           : m.customizer.type === 'Transfer'
-                          ? 'border-slate-800'
+                          ? 'border-slate-800 dark:border-zinc-700'
                           : 'border-[#f56565]'
                       }`}>
                         {/* Top Query/Description display */}
-                        <div className="text-[11.5px] font-bold text-slate-700 leading-tight">
+                        <div className="text-[11.5px] font-bold text-slate-700 dark:text-zinc-350 leading-tight">
                           <input
                             type="text"
                             value={m.customizer.description}
                             onChange={e => handleUpdateCustomizerField(m.id, 'description', e.target.value)}
-                            className="w-full bg-transparent border-none outline-none font-bold text-slate-800 focus:ring-0 p-0"
+                            className="w-full bg-transparent border-none outline-none font-bold text-slate-800 dark:text-zinc-100 focus:ring-0 p-0"
                             placeholder="Description..."
                           />
-                        </div>
-
-                        {/* Date and Amount Row */}
+                                            {/* Date and Amount Row */}
                         <div className="flex justify-between items-center py-1">
                           <div className="flex flex-col">
                             <span className="text-[8px] uppercase tracking-wider text-slate-400 font-extrabold">Date</span>
@@ -870,23 +1000,23 @@ export const Chat: React.FC = () => {
                           <div className="flex flex-col items-end">
                             <span className="text-[8px] uppercase tracking-wider text-slate-400 font-extrabold">Amount</span>
                             <div className="flex items-center">
-                              <span className="text-[15px] font-black text-slate-800 mr-0.5">₹</span>
+                              <span className="text-[15px] font-black text-slate-800 dark:text-zinc-300 mr-0.5">₹</span>
                               <input
                                 type="number"
                                 value={m.customizer.amount}
                                 onChange={e => handleUpdateCustomizerField(m.id, 'amount', parseFloat(e.target.value) || 0)}
-                                className="w-20 text-right bg-transparent border-none outline-none font-black text-[16px] text-slate-800 focus:ring-0 p-0"
+                                className="w-20 text-right bg-transparent border-none outline-none font-black text-[16px] text-slate-800 dark:text-zinc-100 focus:ring-0 p-0"
                               />
                             </div>
                           </div>
                         </div>
 
                         {/* Dashed Box Container enclosing Type and Category selectors */}
-                        <div className={`border-2 border-dashed p-3 rounded-xl grid grid-cols-2 gap-2.5 ${
+                        <div className={`border-2 border-dashed p-3 rounded-xl space-y-3 ${
                           m.customizer.type === 'Income'
                             ? 'border-[#2fb09b]/60'
                             : m.customizer.type === 'Transfer'
-                            ? 'border-slate-400'
+                            ? 'border-slate-300 dark:border-zinc-700'
                             : 'border-[#f56565]/60'
                         }`}>
                           {/* Type Box */}
@@ -895,27 +1025,27 @@ export const Chat: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setActiveDropdown(activeDropdown === `${m.id}_type` ? null : `${m.id}_type`)}
-                              className="w-full px-2 py-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705"
+                              className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-205 dark:border-zinc-800 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-700 dark:text-zinc-300"
                             >
                               <div className="flex items-center space-x-1">
                                 {m.customizer.type === 'Income' ? (
-                                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                    <span className="text-[9px] text-emerald-600 font-black">↓</span>
+                                  <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 dark:bg-emerald-950/20 flex items-center justify-center shrink-0">
+                                    <span className="text-[9px] text-emerald-600 dark:text-emerald-450 font-black">↓</span>
                                   </div>
                                 ) : m.customizer.type === 'Transfer' ? (
-                                  <div className="w-3.5 h-3.5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                                    <span className="text-[9px] text-slate-600 font-black">⇄</span>
+                                  <div className="w-3.5 h-3.5 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                                    <span className="text-[9px] text-slate-600 dark:text-slate-400 font-black">⇄</span>
                                   </div>
                                 ) : (
-                                  <div className="w-3.5 h-3.5 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                                    <span className="text-[9px] text-rose-600 font-black">↑</span>
+                                  <div className="w-3.5 h-3.5 rounded-full bg-rose-100 dark:bg-rose-950/20 flex items-center justify-center shrink-0">
+                                    <span className="text-[9px] text-rose-600 dark:text-rose-450 font-black">↑</span>
                                   </div>
                                 )}
                                 <span className={
                                   m.customizer.type === 'Income'
                                     ? 'text-[#2fb09b]'
                                     : m.customizer.type === 'Transfer'
-                                    ? 'text-slate-700'
+                                    ? 'text-slate-700 dark:text-zinc-300'
                                     : 'text-[#f56565]'
                                 }>{m.customizer.type || 'Expense'}</span>
                               </div>
@@ -923,7 +1053,7 @@ export const Chat: React.FC = () => {
                             </button>
                             
                             {activeDropdown === `${m.id}_type` && (
-                              <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[9px] font-bold">
+                              <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[9px] font-bold">
                                 {(['Expense', 'Income', 'Transfer'] as const).map(tVal => (
                                   <button
                                     key={tVal}
@@ -935,7 +1065,7 @@ export const Chat: React.FC = () => {
                                       }
                                       setActiveDropdown(null);
                                     }}
-                                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 text-[9px] font-bold flex items-center justify-between transition-colors text-slate-700"
+                                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 text-[9px] font-bold flex items-center justify-between transition-colors text-slate-705 dark:text-zinc-300"
                                   >
                                     <span>{tVal}</span>
                                     {(m.customizer!.type || 'Expense') === tVal && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />}
@@ -947,55 +1077,21 @@ export const Chat: React.FC = () => {
 
                           {/* Category Box */}
                           <div className="space-y-0.5 relative">
-                            <span className="text-[8px] uppercase font-extrabold text-slate-400">Category</span>
+                            <span className="text-[8px] uppercase font-extrabold text-slate-405 block">Category</span>
                             <button
                               type="button"
-                              onClick={() => setActiveDropdown(activeDropdown === `${m.id}_cat` ? null : `${m.id}_cat`)}
-                              className="w-full px-2 py-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705"
+                              onClick={() => setActiveDropdown(activeDropdown === `${m.id}_category` ? null : `${m.id}_category`)}
+                              className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-zinc-955/20 border border-slate-205 dark:border-zinc-800 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705 dark:text-zinc-300"
                             >
-                              <div className="flex items-center space-x-1 min-w-0">
-                                {m.customizer.type === 'Transfer' ? (
-                                  <span className="text-[10px]">⇄</span>
-                                ) : (
-                                  m.customizer.category === 'Salary' || m.customizer.category === 'Freelancing' || m.customizer.category === 'Business Income' || m.customizer.category === 'Freelance/Stipend' ? (
-                                    <span className="text-[10px]">💻</span>
-                                  ) : m.customizer.category === 'Eating Out/Ordering In' || m.customizer.category === 'Groceries' ? (
-                                    <span className="text-[10px]">🍔</span>
-                                  ) : m.customizer.category === 'Fuel' || m.customizer.category === 'Travel' ? (
-                                    <span className="text-[10px]">🚗</span>
-                                  ) : m.customizer.category === 'Shopping' ? (
-                                    <span className="text-[10px]">🛍️</span>
-                                  ) : m.customizer.category === 'Entertainment' ? (
-                                    <span className="text-[10px]">🎬</span>
-                                  ) : (
-                                    <span className="text-[10px]">📦</span>
-                                  )
-                                )}
-                                <span className="truncate">{m.customizer.category}</span>
+                              <div className="flex items-center space-x-1.5 min-w-0">
+                                <span className="text-[11px] shrink-0">{getCategoryEmoji(m.customizer.category, m.customizer.type)}</span>
+                                <span className="truncate text-slate-705 dark:text-zinc-300">{m.customizer.category}</span>
                               </div>
-                              <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-405 shrink-0" />
                             </button>
-                            
-                            {activeDropdown === `${m.id}_cat` && (
-                              <div className="absolute top-full right-0 w-44 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-36 overflow-y-auto scrollbar-none py-1 z-50 animate-slideUp text-[9px] font-bold">
-                                {CATEGORIES.map(c => (
-                                  <button
-                                    key={c}
-                                    type="button"
-                                    onClick={() => {
-                                      handleUpdateCustomizerField(m.id, 'category', c);
-                                      setActiveDropdown(null);
-                                    }}
-                                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 text-[9px] font-bold flex items-center justify-between transition-colors text-slate-700 truncate"
-                                  >
-                                    <span className="truncate">{c}</span>
-                                    {m.customizer!.category === c && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0 ml-1" />}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
                           </div>
                         </div>
+                      </div>
 
                         {/* Your Tags Section */}
                         {m.customizer.type !== 'Transfer' && (
@@ -1009,7 +1105,7 @@ export const Chat: React.FC = () => {
                                     {tagArray.map((tag, idx) => (
                                       <span
                                         key={idx}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200"
+                                        className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-650 dark:text-zinc-350 text-[10px] font-bold border border-slate-200 dark:border-zinc-700"
                                       >
                                         <span>{tag}</span>
                                         <button
@@ -1083,7 +1179,7 @@ export const Chat: React.FC = () => {
                                       type="text"
                                       value={m.customizer.account}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'account', e.target.value)}
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-705"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
                                   <div className="space-y-0.5">
@@ -1092,7 +1188,7 @@ export const Chat: React.FC = () => {
                                       type="text"
                                       value={m.customizer.subcategory}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'subcategory', e.target.value)}
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-705"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
                                 </div>
@@ -1104,13 +1200,13 @@ export const Chat: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => setActiveDropdown(activeDropdown === `${m.id}_method` ? null : `${m.id}_method`)}
-                                      className="w-full px-1.5 py-1 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[8px] outline-none text-slate-705"
+                                      className="w-full px-1.5 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 flex items-center justify-between text-[8px] outline-none text-slate-700 dark:text-zinc-300"
                                     >
                                       <span className="truncate">{m.customizer.paymentMethod}</span>
                                       <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0 ml-0.5" />
                                     </button>
                                     {activeDropdown === `${m.id}_method` && (
-                                      <div className="absolute top-full left-0 w-24 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[8px] font-bold text-slate-705">
+                                      <div className="absolute top-full left-0 w-24 mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[8px] font-bold text-slate-700 dark:text-zinc-300">
                                         {['UPI', 'Card', 'Cash', 'Bank Transfer'].map(method => (
                                           <button
                                             key={method}
@@ -1119,7 +1215,7 @@ export const Chat: React.FC = () => {
                                               handleUpdateCustomizerField(m.id, 'paymentMethod', method);
                                               setActiveDropdown(null);
                                             }}
-                                            className="w-full text-left px-2 py-1 hover:bg-slate-50 text-[8px] font-bold flex items-center justify-between transition-colors text-slate-705"
+                                            className="w-full text-left px-2 py-1 hover:bg-slate-50 dark:hover:bg-zinc-800 text-[8px] font-bold flex items-center justify-between transition-colors text-slate-700 dark:text-zinc-300"
                                           >
                                             <span>{method}</span>
                                             {m.customizer!.paymentMethod === method && <CheckCircle2 className="w-2 h-2 text-emerald-500 shrink-0" />}
@@ -1135,7 +1231,7 @@ export const Chat: React.FC = () => {
                                       type="text"
                                       value={m.customizer.account}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'account', e.target.value)}
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-750"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
 
@@ -1145,7 +1241,7 @@ export const Chat: React.FC = () => {
                                       type="time"
                                       value={m.customizer.time}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'time', e.target.value)}
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-750"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
                                 </div>
@@ -1164,10 +1260,10 @@ export const Chat: React.FC = () => {
                                       value={m.customizer.merchantName}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'merchantName', e.target.value)}
                                       placeholder="e.g. Dominos"
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-slate-705"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
-
+ 
                                   <div className="space-y-0.5">
                                     <span className="text-[7.5px] uppercase font-extrabold text-slate-400 flex items-center space-x-0.5">
                                       <MapPin className="w-2.5 h-2.5 text-slate-400" />
@@ -1178,12 +1274,12 @@ export const Chat: React.FC = () => {
                                       value={m.customizer.location}
                                       onChange={e => handleUpdateCustomizerField(m.id, 'location', e.target.value)}
                                       placeholder="e.g. Karimpur"
-                                      className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-slate-705"
+                                      className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-slate-700 dark:text-zinc-300"
                                     />
                                   </div>
                                 </div>
                               )}
-
+ 
                               {/* Notes */}
                               <div className="space-y-0.5">
                                 <span className="text-[7.5px] uppercase font-extrabold text-slate-400">Notes Log</span>
@@ -1192,13 +1288,13 @@ export const Chat: React.FC = () => {
                                   onChange={e => handleUpdateCustomizerField(m.id, 'note', e.target.value)}
                                   placeholder="Additional details..."
                                   rows={2}
-                                  className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none resize-none text-slate-750 font-bold"
+                                  className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none resize-none text-slate-700 dark:text-zinc-300 font-bold"
                                 />
                               </div>
-
+ 
                               {/* Extracted Items */}
                               {m.customizer.type !== 'Transfer' && (
-                                <div className="space-y-1.5 pt-1.5 border-t border-slate-100">
+                                <div className="space-y-1.5 pt-1.5 border-t border-slate-100 dark:border-zinc-800">
                                   <div className="flex justify-between items-center text-[7.5px] uppercase font-extrabold text-slate-400">
                                     <span>Extracted Items list ({m.customizer.items.length})</span>
                                     <button
@@ -1210,7 +1306,7 @@ export const Chat: React.FC = () => {
                                       <span>Add Item</span>
                                     </button>
                                   </div>
-
+ 
                                   <div className="space-y-1.5 max-h-24 overflow-y-auto scrollbar-none pr-1">
                                     {m.customizer.items.map((item, idx) => (
                                       <div key={idx} className="flex items-center space-x-1.5">
@@ -1219,14 +1315,14 @@ export const Chat: React.FC = () => {
                                           value={item.name}
                                           onChange={e => handleUpdateItem(m.id, idx, 'name', e.target.value)}
                                           placeholder="Product"
-                                          className="flex-[2] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-750"
+                                          className="flex-[2] px-1.5 py-0.5 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                         />
                                         <input
                                           type="number"
                                           value={item.price}
                                           onChange={e => handleUpdateItem(m.id, idx, 'price', e.target.value)}
                                           placeholder="0.00"
-                                          className="flex-[1] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] font-bold text-slate-750"
+                                          className="flex-[1] px-1.5 py-0.5 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] font-bold text-slate-700 dark:text-zinc-300"
                                         />
                                         <button
                                           type="button"
@@ -1294,8 +1390,8 @@ export const Chat: React.FC = () => {
       </div>
 
       {/* 5. Combined Scanner & Text Input Controller Bar (Pushed slightly up to be visible above bottom tabs) */}
-      <div className="bg-[#183235] p-3.5 pb-[72px] rounded-t-[24px] border-t border-[#1f4246] space-y-2.5 shrink-0 shadow-lg">
-        <form onSubmit={handleSendMessage} className="bg-[#122325] border border-[#1f4246] p-1.5 rounded-2xl flex items-center space-x-2">
+      <div className="bg-white dark:bg-[#18181b] p-3.5 pb-[72px] rounded-t-[24px] border-t border-slate-200 dark:border-zinc-800 space-y-2.5 shrink-0 shadow-lg animate-fadeIn">
+        <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-zinc-950 border border-slate-205 dark:border-zinc-850 p-1.5 rounded-2xl flex items-center space-x-2">
           
           <div className="flex items-center space-x-1 shrink-0 pl-1">
             {/* Action: 📷 Photo to Scan Texts */}
@@ -1310,10 +1406,10 @@ export const Chat: React.FC = () => {
               />
               <label
                 htmlFor="chat-photo-text-scanner"
-                className="w-8 h-8 rounded-xl hover:bg-[#1f4246] flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-xl hover:bg-slate-100 dark:hover:bg-zinc-900 flex items-center justify-center cursor-pointer transition-colors"
                 title="Photo to Scan Texts"
               >
-                <Camera className="w-4.5 h-4.5 text-emerald-400 hover:text-emerald-300" />
+                <Camera className="w-4.5 h-4.5 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200" />
               </label>
             </div>
           </div>
@@ -1323,33 +1419,86 @@ export const Chat: React.FC = () => {
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             placeholder="Type or describe transaction..."
-            className="flex-1 text-xs bg-transparent border-none outline-none text-white placeholder-slate-400 font-semibold focus:ring-0 focus:border-none focus:outline-none p-1"
+            className="flex-1 text-xs bg-transparent border-none outline-none text-slate-800 dark:text-zinc-100 placeholder-slate-400 dark:placeholder-zinc-600 font-semibold focus:ring-0 focus:border-none focus:outline-none p-1"
             disabled={loading}
           />
 
           <button
             type="submit"
-            className="w-8 h-8 bg-emerald-400 hover:bg-[#2fb09b] text-[#122325] rounded-xl flex items-center justify-center transition-transform active:scale-95 shrink-0 font-bold"
+            className="w-8 h-8 bg-black dark:bg-white hover:bg-slate-900 dark:hover:bg-slate-100 text-white dark:text-black rounded-xl flex items-center justify-center transition-transform active:scale-95 shrink-0 font-bold"
             disabled={loading || !inputText.trim()}
           >
             <Send className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Footer Sub-row */}
-        <div className="flex justify-between items-center text-[8.5px] uppercase font-black text-[#7ea0a4] tracking-wider select-none px-2">
-          <span className="flex items-center space-x-1">
-            <span className="text-emerald-400">#</span>
-            <span>Ask Passbook AI Assistant</span>
-          </span>
-          <span className="flex items-center space-x-1.5">
-            <Camera className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Photo to Scan Texts</span>
-          </span>
         </div>
-      </div>
 
-    </div>
-  );
-};
+        {/* Category bottom sheet overlay */}
+        {(() => {
+          if (!activeDropdown || !activeDropdown.endsWith('_category')) return null;
+          const msgId = activeDropdown.replace('_category', '');
+          const msg = messages.find(m => m.id === msgId);
+          if (!msg || !msg.customizer) return null;
+          
+          const txnType = msg.customizer.type || 'Expense';
+          const currentCategory = msg.customizer.category;
+          
+          return (
+            <div className="absolute inset-0 z-[60] bg-black/45 backdrop-blur-xs flex flex-col justify-end select-none animate-fadeIn">
+              {/* Click outside to close */}
+              <div className="absolute inset-0 -z-10" onClick={() => setActiveDropdown(null)} />
+              
+              {/* Sliding Sheet */}
+              <div className="w-full bg-white dark:bg-[#18181b] border-t border-slate-200 dark:border-zinc-800 rounded-t-[28px] p-5 shadow-2xl flex flex-col max-h-[70%] animate-slideUp text-black dark:text-white">
+                {/* Pull bar indicator */}
+                <div className="w-10 h-1 bg-slate-300 dark:bg-zinc-700 rounded-full mx-auto mb-4 shrink-0" />
+                
+                {/* Title */}
+                <div className="flex justify-between items-center mb-4 shrink-0">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-450 dark:text-zinc-500">
+                    Select Category ({txnType})
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setActiveDropdown(null)}
+                    className="p-1 rounded-full text-slate-400 hover:text-black dark:hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {/* Grid list of categories */}
+                <div className="grid grid-cols-3 gap-2 overflow-y-auto scrollbar-none pb-6">
+                  {(txnType === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map((c: string) => {
+                    const isSelected = currentCategory === c;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          handleUpdateCustomizerField(msgId, 'category', c);
+                          setActiveDropdown(null);
+                        }}
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer space-y-1 ${
+                          isSelected
+                            ? 'bg-black text-white border-black dark:bg-white dark:text-black dark:border-white shadow-md scale-105'
+                            : 'bg-slate-50 dark:bg-zinc-950 hover:bg-slate-100 dark:hover:bg-zinc-900 border-transparent text-slate-700 dark:text-zinc-355'
+                        }`}
+                      >
+                        <span className="text-[20px]">{getCategoryEmoji(c, txnType)}</span>
+                        <span className="text-[8.5px] font-bold text-center leading-tight truncate w-full">
+                          {c}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 

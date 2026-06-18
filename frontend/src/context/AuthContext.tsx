@@ -141,24 +141,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Load token on mount
+  // Load token on mount and auto-login if none exists
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    const savedUserStr = localStorage.getItem('user');
+    const initializeAuth = async () => {
+      const savedToken = localStorage.getItem('token');
+      const savedUserStr = localStorage.getItem('user');
 
-    if (savedToken && savedUserStr) {
-      try {
-        const savedUser = JSON.parse(savedUserStr);
-        setToken(savedToken);
-        setUser(savedUser);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
-      } catch (e) {
-        console.error('Failed to parse saved user:', e);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+      if (savedToken && savedUserStr) {
+        try {
+          const savedUser = JSON.parse(savedUserStr);
+          setToken(savedToken);
+          setUser(savedUser);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+          setLoading(false);
+          return;
+        } catch (e) {
+          console.error('Failed to parse saved user:', e);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+        }
       }
-    }
-    setLoading(false);
+
+      // No session, trigger auto demo login as ADMIN
+      try {
+        const email = 'admin@tracker.com';
+        const password = 'admin123';
+        const res = await axios.post('/api/auth/login', { email, password });
+        saveAuthSession(res.data.token, res.data.user);
+      } catch (err) {
+        console.error('Demo Login failed, trying manual register:', err);
+        try {
+          const seedName = 'Alpha Admin';
+          const seedEmail = `admin_${Date.now()}@demo.com`;
+          const res = await axios.post('/api/auth/register', {
+            email: seedEmail,
+            password: 'demo123',
+            name: seedName,
+            role: 'ADMIN'
+          });
+          saveAuthSession(res.data.token, res.data.user);
+        } catch (regErr) {
+          console.error('Auto register failed:', regErr);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
   }, []);
 
   const saveAuthSession = (newToken: string, newUser: User) => {
@@ -215,6 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setUser(null);
     delete axios.defaults.headers.common['Authorization'];
+    window.location.href = '/';
   };
 
   return (

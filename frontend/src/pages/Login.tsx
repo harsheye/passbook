@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CreditCard, AlertCircle, ShieldAlert, KeyRound } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { login, register, resetPassword, googleLogin, demoLogin } = useAuth();
+  const { user, login, register, resetPassword, googleLogin, demoLogin } = useAuth();
+  
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
+
   const [tab, setTab] = useState<'login' | 'register' | 'reset'>('login');
   
   // Forms

@@ -68,6 +68,45 @@ export class AIService {
   }
 
   /**
+   * Helper to map any parsed category to one of the standard frontend categories
+   */
+  public static mapToStandardCategory(categoryName: string, type: 'EXPENSE' | 'INCOME'): string {
+    const name = (categoryName || '').trim();
+    const nameLower = name.toLowerCase();
+
+    if (type === 'INCOME') {
+      if (nameLower.includes('salary') || nameLower.includes('paycheck') || nameLower.includes('wage')) return 'Salary';
+      if (nameLower.includes('freelance') || nameLower.includes('gig')) return 'Freelancing';
+      if (nameLower.includes('business') || nameLower.includes('revenue') || nameLower.includes('sales')) return 'Business Income';
+      if (nameLower.includes('interest')) return 'Interest';
+      if (nameLower.includes('investment') || nameLower.includes('dividend') || nameLower.includes('returns')) return 'Investment Returns';
+      if (nameLower.includes('bonus') || nameLower.includes('present')) return 'Bonus';
+      if (nameLower.includes('refund')) return 'Refund';
+      if (nameLower.includes('cashback')) return 'Cashback';
+      return 'Other Income';
+    } else {
+      if (nameLower.includes('beauty') || nameLower.includes('wellness') || nameLower.includes('salon') || nameLower.includes('spa') || nameLower.includes('parlor') || nameLower.includes('cosmetic')) return 'Beauty/Wellness';
+      if (nameLower.includes('eat') || nameLower.includes('food') || nameLower.includes('restaurant') || nameLower.includes('dinner') || nameLower.includes('lunch') || nameLower.includes('breakfast') || nameLower.includes('cafe') || nameLower.includes('pizza') || nameLower.includes('burger') || nameLower.includes('swiggy') || nameLower.includes('zomato') || nameLower.includes('starbucks') || nameLower.includes('kfc') || nameLower.includes('mcdonald')) return 'Eating Out/Ordering In';
+      if (nameLower.includes('movie') || nameLower.includes('cinema') || nameLower.includes('netflix') || nameLower.includes('spotify') || nameLower.includes('entertainment') || nameLower.includes('ticket') || nameLower.includes('show') || nameLower.includes('concert') || nameLower.includes('club') || nameLower.includes('pub') || nameLower.includes('bar') || nameLower.includes('party')) return 'Entertainment';
+      if (nameLower.includes('fit') || nameLower.includes('sport') || nameLower.includes('gym') || nameLower.includes('workout') || nameLower.includes('running') || nameLower.includes('athlete')) return 'Fitness/Sports';
+      if (nameLower.includes('fuel') || nameLower.includes('petrol') || nameLower.includes('diesel') || nameLower.includes('gas')) return 'Fuel';
+      if (nameLower.includes('gift') || nameLower.includes('donation') || nameLower.includes('charity')) return 'Gifts';
+      if (nameLower.includes('grocer') || nameLower.includes('milk') || nameLower.includes('egg') || nameLower.includes('paneer') || nameLower.includes('vegetable') || nameLower.includes('fruit') || nameLower.includes('bread') || nameLower.includes('butter') || nameLower.includes('cheese') || nameLower.includes('rice') || nameLower.includes('oil') || nameLower.includes('sugar') || nameLower.includes('salt') || nameLower.includes('supermarket') || nameLower.includes('store')) return 'Groceries';
+      if (nameLower.includes('health') || nameLower.includes('doctor') || nameLower.includes('hospital') || nameLower.includes('medicine') || nameLower.includes('pharmacy') || nameLower.includes('clinic') || nameLower.includes('medical') || nameLower.includes('dentist')) return 'Healthcare';
+      if (nameLower.includes('home') || nameLower.includes('furniture') || nameLower.includes('improvement') || nameLower.includes('repair') || nameLower.includes('appliance') || nameLower.includes('decor')) return 'Home Improvement';
+      if (nameLower.includes('loan') || nameLower.includes('emi') || nameLower.includes('debt') || nameLower.includes('mortgage') || nameLower.includes('card payment')) return 'Loan/EMI Payments';
+      if (nameLower.includes('rent') || nameLower.includes('flat') || nameLower.includes('room') || nameLower.includes('hostel') || nameLower.includes('pg') || nameLower.includes('landlord')) return 'Rent';
+      if (nameLower.includes('shop') || nameLower.includes('clothing') || nameLower.includes('clothes') || nameLower.includes('shirt') || nameLower.includes('pant') || nameLower.includes('jeans') || nameLower.includes('shoes') || nameLower.includes('jacket') || nameLower.includes('dress') || nameLower.includes('amazon') || nameLower.includes('flipkart') || nameLower.includes('myntra') || nameLower.includes('mall') || nameLower.includes('electronics') || nameLower.includes('gadget') || nameLower.includes('laptop') || nameLower.includes('phone') || nameLower.includes('device')) return 'Shopping';
+      if (nameLower.includes('skill') || nameLower.includes('course') || nameLower.includes('education') || nameLower.includes('tuition') || nameLower.includes('book') || nameLower.includes('school') || nameLower.includes('college') || nameLower.includes('fee') || nameLower.includes('udemy') || nameLower.includes('coursera') || nameLower.includes('learning')) return 'Skill Development';
+      if (nameLower.includes('sub') || nameLower.includes('subscription') || nameLower.includes('prime') || nameLower.includes('youtube') || nameLower.includes('hotstar')) return 'Subscriptions';
+      if (nameLower.includes('travel') || nameLower.includes('uber') || nameLower.includes('ola') || nameLower.includes('cab') || nameLower.includes('auto') || nameLower.includes('flight') || nameLower.includes('ticket') || nameLower.includes('train') || nameLower.includes('bus') || nameLower.includes('metro') || nameLower.includes('hotel') || nameLower.includes('holiday') || nameLower.includes('vacation')) return 'Travel';
+      if (nameLower.includes('utility') || nameLower.includes('bill') || nameLower.includes('electricity') || nameLower.includes('water') || nameLower.includes('internet') || nameLower.includes('wifi') || nameLower.includes('recharge') || nameLower.includes('broadband')) return 'Utilities/Bills';
+      
+      return 'Miscellaneous';
+    }
+  }
+
+  /**
    * Categorizes a transaction description automatically using keyword mapping
    */
   public static autoCategorize(description: string, amount: number): { category: string; subcategory: string; type: 'EXPENSE' | 'INCOME' } {
@@ -217,10 +256,10 @@ export class AIService {
     ];
 
     const categoryKeywords: Record<string, string[]> = {
-      'Grocery': ['milk', 'egg', 'paneer', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'grocery', 'groceries', 'fruit', 'apple', 'banana', 'potato', 'onion', 'rice', 'oil', 'sugar', 'salt'],
-      'Eating Out': ['pizza', 'burger', 'restaurant', 'swiggy', 'zomato', 'starbucks', 'kfc', 'cafe', 'coffee', 'tea', 'coke'],
-      'Movies': ['movie', 'netflix', 'cinema', 'spotify', 'entertainment', 'ticket'],
-      'Clothes': ['shirt', 'pant', 'jeans', 'shoes', 'clothes', 'clothing', 'jacket']
+      'Groceries': ['milk', 'egg', 'paneer', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'grocery', 'groceries', 'fruit', 'apple', 'banana', 'potato', 'onion', 'rice', 'oil', 'sugar', 'salt'],
+      'Eating Out/Ordering In': ['pizza', 'burger', 'restaurant', 'swiggy', 'zomato', 'starbucks', 'kfc', 'cafe', 'coffee', 'tea', 'coke'],
+      'Entertainment': ['movie', 'netflix', 'cinema', 'spotify', 'entertainment', 'ticket'],
+      'Shopping': ['shirt', 'pant', 'jeans', 'shoes', 'clothes', 'clothing', 'jacket']
     };
 
     const foundKeywords: string[] = [];
@@ -269,16 +308,17 @@ export class AIService {
           });
         }
 
+        const standardCat = this.mapToStandardCategory(cat, type);
         return {
           amount: isIncome ? splitAmount : -splitAmount,
           type,
-          description: cat,
-          category: cat,
+          description: standardCat,
+          category: standardCat,
           subcategory: 'General',
           date,
           paymentMethod,
           account,
-          tags: `${cat.toLowerCase()}`,
+          tags: `${standardCat.toLowerCase()}`,
           notes: `AI Generated split category entry from local parser: "${cleanText}"`,
           items: itemsForCat
         };
@@ -303,13 +343,21 @@ export class AIService {
     const items: { name: string; price: number }[] = [];
 
     if (foundKeywords.length === 1) {
-      category = foundKeywords[0];
+      const keyword = foundKeywords[0].toLowerCase();
+      let matchedCat = isIncome ? 'Other Income' : 'Miscellaneous';
+      for (const [cat, words] of Object.entries(categoryKeywords)) {
+        if (words.includes(keyword)) {
+          matchedCat = cat;
+          break;
+        }
+      }
+      category = matchedCat;
       description = foundKeywords[0];
       items.push({ name: foundKeywords[0], price: Math.abs(amount) });
     } else if (foundKeywords.length > 1) {
       // Multiple items in same/undetermined category
-      category = detectedCats[0] || 'Grocery';
-      description = detectedCats[0] || 'Grocery';
+      category = detectedCats[0] || (isIncome ? 'Other Income' : 'Groceries');
+      description = detectedCats[0] || (isIncome ? 'Income Source' : 'Groceries');
       
       const avgPrice = Math.round((Math.abs(amount) / foundKeywords.length) * 100) / 100;
       foundKeywords.forEach((name, idx) => {
@@ -339,18 +387,20 @@ export class AIService {
       }
       description = fallbackDesc;
       items.push({ name: fallbackDesc, price: Math.abs(amount) });
+      category = isIncome ? 'Other Income' : 'Miscellaneous';
     }
 
+    const standardCategory = this.mapToStandardCategory(category, type);
     return {
       amount: isIncome ? amount : -amount,
       type,
       description,
-      category,
+      category: standardCategory,
       subcategory: 'General',
       date,
       paymentMethod,
       account,
-      tags: `${category.toLowerCase()}`,
+      tags: `${standardCategory.toLowerCase()}`,
       notes: `AI Generated from local parser: "${cleanText}"`,
       items
     };
@@ -434,8 +484,8 @@ export class AIService {
                {
                  "amount": number (positive amount),
                  "type": "EXPENSE" or "INCOME",
-                 "description": string (appropriate general description like "Grocery", "Eating Out", "Movies", "Clothes", "Fruit" if multiple items, or the item name if it is a single item like "Milk" or "Kurkure"),
-                 "category": string (e.g. "Milk" or "Kurkure" if it is a single item, or a general category like "Grocery", "Eating Out", "Movies", "Clothes", "Fruit" if multiple items are entered),
+                 "description": string (appropriate general description),
+                 "category": string (MUST be one of the standard categories listed below),
                  "subcategory": string,
                  "date": "YYYY-MM-DD",
                  "paymentMethod": string,
@@ -446,11 +496,41 @@ export class AIService {
                }
              ]
            }
+           VALID CATEGORIES:
+           For EXPENSE type, category MUST be one of:
+           - "Beauty/Wellness"
+           - "Eating Out/Ordering In"
+           - "Entertainment"
+           - "Fitness/Sports"
+           - "Fuel"
+           - "Gifts"
+           - "Groceries"
+           - "Healthcare"
+           - "Home Improvement"
+           - "Loan/EMI Payments"
+           - "Miscellaneous"
+           - "Rent"
+           - "Shopping"
+           - "Skill Development"
+           - "Subscriptions"
+           - "Travel"
+           - "Utilities/Bills"
+
+           For INCOME type, category MUST be one of:
+           - "Salary"
+           - "Freelancing"
+           - "Business Income"
+           - "Interest"
+           - "Investment Returns"
+           - "Bonus"
+           - "Refund"
+           - "Cashback"
+           - "Other Income"
+
            CRITICAL INSTRUCTIONS:
-           1. If the input contains items from DIFFERENT categories (e.g. groceries AND movies, or food AND clothing), create SEPARATE entries in the "transactions" array for each category, splitting the total amount accordingly.
-           2. If only a SINGLE item is added (e.g. "milk" or "kurkure"), set BOTH the "description" and the "category" of that transaction to that specific item name (capitalized, e.g. "Milk" or "Kurkure").
-           3. If MULTIPLE items of the same category are added, set the "category" and "description" to an appropriate general term (e.g. "Grocery", "Eating Out", "Movies", "Clothes", "Fruit"), NOT the individual item names.
-           4. In the "items" array, list each item separately with its name and price. If individual prices are not explicitly stated, distribute the total amount realistically so that the sum of item prices equals the transaction amount.`
+           1. If the input contains items from DIFFERENT categories, create SEPARATE entries in the "transactions" array for each category, splitting the total amount accordingly.
+           2. The "category" field MUST be exactly one of the standard categories listed above. Do not output custom item names or custom categories.
+           3. In the "items" array, list each item separately with its name and price. If individual prices are not explicitly stated, distribute the total amount realistically so that the sum of item prices equals the transaction amount.`
         : `You are an AI gambling entry parser. Analyze the user's natural language input and output a strict JSON object.
            The JSON structure MUST be:
            {
@@ -477,7 +557,7 @@ export class AIService {
 
       const options = {
         hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -497,6 +577,91 @@ export class AIService {
               resolve(content);
             } else {
               reject(new Error(`Gemini response error: ${JSON.stringify(parsedRes)}`));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+
+      req.on('error', (e) => reject(e));
+      req.write(requestPayload);
+      req.end();
+    });
+  }
+
+  /**
+   * Parses base64 encoded receipt image bytes directly with Gemini 2.0 Flash multimodal API
+   */
+  public static async parseReceiptImage(base64Data: string, mimeType: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const apiKey = this.getGeminiKey();
+      if (!apiKey) {
+        reject(new Error('Gemini API key is not configured in .env'));
+        return;
+      }
+
+      const systemInstructions = `You are an expert financial receipt parser. Analyze the uploaded receipt image and extract transaction details.
+You MUST output a strict JSON object with this exact structure:
+{
+  "description": "Short summary of purchase",
+  "amount": number (positive value representing the total price of all items),
+  "type": "Expense",
+  "category": "Shopping", // Must map to one of: "Beauty/Wellness", "Eating Out/Ordering In", "Entertainment", "Fitness/Sports", "Fuel", "Gifts", "Groceries", "Healthcare", "Home Improvement", "Loan/EMI Payments", "Miscellaneous", "Money Transfers", "Rent", "Shopping", "Skill Development", "Subscriptions", "Travel", "Utilities/Bills"
+  "subcategory": "General" or more specific subcategory string,
+  "paymentMethod": "UPI", "Card", "Cash", "Net Banking",
+  "account": "SBI", "HDFC", "SBI Savings",
+  "merchantName": "Name of store/vendor",
+  "location": "Location or city name if visible, else empty",
+  "tags": "comma, separated, tags",
+  "notes": "Additional info or note",
+  "items": [
+    { "name": "Product name 1", "price": number },
+    { "name": "Product name 2", "price": number }
+  ]
+}`;
+
+      const requestPayload = JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              },
+              { text: systemInstructions }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const options = {
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestPayload)
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let body = '';
+        res.on('data', (chunk) => body += chunk);
+        res.on('end', () => {
+          try {
+            const parsedRes = JSON.parse(body);
+            if (parsedRes.candidates && parsedRes.candidates[0] && parsedRes.candidates[0].content) {
+              const textContent = parsedRes.candidates[0].content.parts[0].text;
+              const content = JSON.parse(textContent.trim());
+              resolve(content);
+            } else {
+              reject(new Error(`Gemini OCR response error: ${JSON.stringify(parsedRes)}`));
             }
           } catch (e) {
             reject(e);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -78,6 +78,40 @@ const INCOME_CATEGORIES = [
 ];
 
 const CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
+
+const getCategoryEmoji = (category: string) => {
+  const c = category.trim();
+  switch (c) {
+    case 'Salary': return '💰';
+    case 'Freelancing': return '💻';
+    case 'Business Income': return '🏢';
+    case 'Interest': return '📈';
+    case 'Investment Returns': return '📊';
+    case 'Bonus': return '🎁';
+    case 'Refund': return '↩️';
+    case 'Cashback': return '💸';
+    case 'Other Income': return '🪙';
+    case 'Beauty/Wellness': return '💅';
+    case 'Eating Out/Ordering In': return '🍔';
+    case 'Entertainment': return '🎬';
+    case 'Fitness/Sports': return '👟';
+    case 'Fuel': return '⛽';
+    case 'Gifts': return '💝';
+    case 'Groceries': return '🛒';
+    case 'Healthcare': return '🏥';
+    case 'Home Improvement': return '🏡';
+    case 'Loan/EMI Payments': return '💳';
+    case 'Miscellaneous': return '📦';
+    case 'Money Transfers': return '⇄';
+    case 'Rent': return '🔑';
+    case 'Shopping': return '🛍️';
+    case 'Skill Development': return '📚';
+    case 'Subscriptions': return '🔔';
+    case 'Travel': return '✈️';
+    case 'Utilities/Bills': return '⚡';
+    default: return '📦';
+  }
+};
 
 const parseItemsFromNotes = (notesText: string) => {
   const extracted: { name: string; price: number }[] = [];
@@ -204,6 +238,66 @@ export const Transactions: React.FC = () => {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  useEffect(() => {
+    setSelectedDay(null);
+  }, [selectedMonth, selectedYear]);
+
+  const getThreeMonths = () => {
+    const prevDate = new Date(selectedYear, selectedMonth - 1, 1);
+    const currDate = new Date(selectedYear, selectedMonth, 1);
+    const nextDate = new Date(selectedYear, selectedMonth + 1, 1);
+    
+    return [
+      { name: MONTH_NAMES[prevDate.getMonth()], month: prevDate.getMonth(), year: prevDate.getFullYear(), isSelected: false },
+      { name: MONTH_NAMES[currDate.getMonth()], month: currDate.getMonth(), year: currDate.getFullYear(), isSelected: true },
+      { name: MONTH_NAMES[nextDate.getMonth()], month: nextDate.getMonth(), year: nextDate.getFullYear(), isSelected: false }
+    ];
+  };
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOffset = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const getDayDetails = (dayNum: number) => {
+    const dayDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const dayTxns = transactions.filter(t => {
+      const txDate = t.transactionDate || (t as any).date;
+      if (!txDate) return false;
+      return txDate.startsWith(dayDateStr);
+    });
+    const net = dayTxns.reduce((sum, t) => sum + t.amount, 0);
+    return {
+      net,
+      txns: dayTxns
+    };
+  };
+
+  const formatCompactAmount = (amt: number) => {
+    if (amt === 0) return '';
+    const absAmt = Math.abs(amt);
+    let str = '';
+    if (absAmt >= 1000) {
+      str = (absAmt / 1000).toFixed(0) + 'k';
+    } else {
+      str = absAmt.toFixed(0);
+    }
+    return (amt < 0 ? '-' : '+') + '₹' + str;
+  };
+  
   // Modals & forms
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
@@ -253,6 +347,53 @@ export const Transactions: React.FC = () => {
       console.error('Failed to fetch transaction lists:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRef = useRef(fetchTransactions);
+  useEffect(() => {
+    fetchRef.current = fetchTransactions;
+  });
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setSearch('');
+      setType('All');
+      setCategory('');
+      setQuickFilter('');
+      setSortBy('date');
+      setSortOrder('desc');
+      fetchRef.current();
+    };
+
+    window.addEventListener('transaction-updated', handleUpdate);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('transaction_updates');
+      bc.onmessage = (event) => {
+        if (event.data === 'updated') {
+          handleUpdate();
+        }
+      };
+    } catch (e) {
+      console.warn('BroadcastChannel failed to initialize', e);
+    }
+
+    return () => {
+      window.removeEventListener('transaction-updated', handleUpdate);
+      if (bc) bc.close();
+    };
+  }, []);
+
+  const dispatchTransactionUpdate = () => {
+    window.dispatchEvent(new CustomEvent('transaction-updated'));
+    try {
+      const bc = new BroadcastChannel('transaction_updates');
+      bc.postMessage('updated');
+      bc.close();
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -328,6 +469,7 @@ export const Transactions: React.FC = () => {
       setModalOpen(false);
       resetForm();
       fetchTransactions();
+      dispatchTransactionUpdate();
     } catch (err) {
       alert('Submission failed.');
     }
@@ -444,6 +586,7 @@ export const Transactions: React.FC = () => {
     try {
       await axios.delete(`/api/transactions/${id}`);
       fetchTransactions();
+      dispatchTransactionUpdate();
     } catch (err) {
       alert('Delete failed.');
     }
@@ -455,6 +598,7 @@ export const Transactions: React.FC = () => {
       await axios.delete('/api/transactions', { data: { ids: selectedIds } });
       setSelectedIds([]);
       fetchTransactions();
+      dispatchTransactionUpdate();
     } catch (err) {
       alert('Bulk delete failed.');
     }
@@ -511,7 +655,11 @@ export const Transactions: React.FC = () => {
     return (
       <div
         key={t.id}
-        className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all select-none ${colorClasses}`}
+        onClick={(e) => {
+          if ((e.target as HTMLElement).tagName === 'INPUT') return;
+          handleEdit(t);
+        }}
+        className={`p-3.5 border rounded-2xl flex items-center justify-between transition-all select-none cursor-pointer hover:border-indigo-500/50 ${colorClasses}`}
       >
         <div className="flex items-center space-x-3 min-w-0 flex-1">
           <input
@@ -563,250 +711,225 @@ export const Transactions: React.FC = () => {
           <span className={`font-black text-xs font-sans ${isExpense ? 'text-rose-500' : 'text-emerald-500'}`}>
             {isExpense ? '-' : '+'}₹{Math.abs(t.amount).toLocaleString('en-IN')}
           </span>
-          
-          {/* Actions buttons drawer */}
-          <div className="flex space-x-0.5 border border-slate-200 dark:border-slate-855 rounded-lg p-0.5 bg-white dark:bg-black shrink-0">
-            <button
-              onClick={() => handleEdit(t)}
-              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-black dark:hover:text-white"
-              title="Edit"
-            >
-              <Pencil className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => handleDuplicate(t)}
-              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-black dark:hover:text-white"
-              title="Duplicate"
-            >
-              <Copy className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => handleDelete(t.id)}
-              className="p-1 hover:bg-slate-50 dark:hover:bg-slate-900 rounded text-slate-455 hover:text-rose-500"
-              title="Delete"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
         </div>
       </div>
     );
   };
 
+  const getFilteredTransactions = () => {
+    return transactions.filter(t => {
+      const txDate = t.transactionDate || (t as any).date;
+      if (!txDate) return false;
+      const dateObj = new Date(txDate);
+      return dateObj.getMonth() === selectedMonth && dateObj.getFullYear() === selectedYear;
+    });
+  };
+
+  const filteredTxns = getFilteredTransactions();
+  const displayTxns = selectedDay !== null
+    ? filteredTxns.filter(t => {
+        const dayDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+        const txDate = t.transactionDate || (t as any).date;
+        return txDate && txDate.startsWith(dayDateStr);
+      })
+    : filteredTxns;
+
+  const totalIncome = filteredTxns
+    .filter(t => (t.transactionType || '').toUpperCase() === 'INCOME')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpense = filteredTxns
+    .filter(t => (t.transactionType || '').toUpperCase() === 'EXPENSE' || (t.transactionType || '').toUpperCase() === 'GAMBLING')
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+  const netMonth = totalIncome - totalExpense;
+
+  const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
+  const firstDayOffset = getFirstDayOffset(selectedMonth, selectedYear);
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDayOffset; i++) {
+    cells.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    cells.push(i);
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    rows.push(cells.slice(i, i + 7));
+  }
+
   return (
     <div className="space-y-5 animate-fadeIn pb-16 select-none text-black dark:text-white">
-         {/* Search & Add Button Row */}
+      {/* Top Header Row with Switcher & Segmented Control */}
       <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-405" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search transactions..."
-            className="w-full pl-9 pr-24 py-2 text-[10px] rounded-xl border border-slate-205 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 outline-none text-black dark:text-white"
-          />
-          {/* FLOW TYPE FILTER DROPDOWN INSIDE SEARCH */}
-          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10">
+        {/* 3-button segmented control in place of search */}
+        <div className="flex bg-slate-100 dark:bg-zinc-900 p-0.5 rounded-xl border border-slate-200 dark:border-zinc-800 flex-1 select-none">
+          {[
+            { value: '', label: 'All' },
+            { value: 'Expense', label: 'Expenses' },
+            { value: 'Income', label: 'Income' }
+          ].map(item => (
             <button
+              key={item.value}
               type="button"
-              onClick={() => {
-                setTypeDropdownOpen(prev => !prev);
-                setQuickFilterDropdownOpen(false);
-                setCategoryDropdownOpen(false);
-                setSortByDropdownOpen(false);
-              }}
-              className="px-2 py-1.5 text-[8px] font-extrabold uppercase tracking-tight rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center space-x-1 hover:bg-slate-50 dark:hover:bg-zinc-850 transition-colors text-slate-700 dark:text-slate-200 cursor-pointer"
+              onClick={() => setType(item.value)}
+              className={`flex-1 text-center py-1.5 text-[8.5px] font-extrabold uppercase rounded-lg transition-all cursor-pointer ${
+                type === item.value
+                  ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm'
+                  : 'text-slate-405 hover:text-slate-650 dark:text-zinc-500 dark:hover:text-zinc-305'
+              }`}
             >
-              <span>
-                {type === '' && 'All'}
-                {type === 'Expense' && 'Expenses'}
-                {type === 'Income' && 'Income'}
-                {type === 'Transfer' && 'Transfers'}
-              </span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+              {item.label}
             </button>
-
-            {typeDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-50 animate-slideUp text-[9px] min-w-[90px]">
-                {[
-                  { value: '', label: 'All' },
-                  { value: 'Expense', label: 'Expenses' },
-                  { value: 'Income', label: 'Income' },
-                  { value: 'Transfer', label: 'Transfers' }
-                ].map(item => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setType(item.value);
-                      setTypeDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-semibold flex items-center justify-between text-slate-700 dark:text-slate-200"
-                  >
-                    <span>{item.label}</span>
-                    {type === item.value && <Check className="w-2.5 h-2.5 text-emerald-500" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          ))}
         </div>
-        <button
-          type="button"
-          onClick={() => { resetForm(); setModalOpen(true); }}
-          className="w-8 h-8 rounded-xl bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center shrink-0 border dark:border-white/10"
-          title="Add Transaction"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
 
-      {/* COMPACT SINGLE-LINE FILTERS & SORTING */}
-      <div className="bg-white dark:bg-black border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-sm">
-        <div className="flex items-center space-x-1.5 w-full text-[9px] font-bold">
-          
-          {/* Quick Filter (Time range) */}
-          <div className="relative flex-1 min-w-[70px]">
-            <button
-              type="button"
-              onClick={() => {
-                setQuickFilterDropdownOpen(prev => !prev);
-                setCategoryDropdownOpen(false);
-              }}
-              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between text-[9px] font-bold outline-none text-slate-700 dark:text-slate-200"
-            >
-              <span className="truncate">
-                {quickFilter === 'TODAY' && 'Today'}
-                {quickFilter === 'THIS_WEEK' && 'This Week'}
-                {quickFilter === 'THIS_MONTH' && 'This Month'}
-                {quickFilter === 'LAST_MONTH' && 'Last Month'}
-                {quickFilter === 'LAST_3_MONTHS' && 'Last 3M'}
-                {quickFilter === 'THIS_YEAR' && 'This Year'}
-                {quickFilter === 'ALL' && 'All Time'}
-              </span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0 ml-0.5" />
-            </button>
-
-            {quickFilterDropdownOpen && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-40 animate-slideUp text-[9px] min-w-[90px]">
-                {[
-                  { value: 'TODAY', label: 'Today' },
-                  { value: 'THIS_WEEK', label: 'This Week' },
-                  { value: 'THIS_MONTH', label: 'This Month' },
-                  { value: 'LAST_MONTH', label: 'Last Month' },
-                  { value: 'LAST_3_MONTHS', label: 'Last 3 Months' },
-                  { value: 'THIS_YEAR', label: 'This Year' },
-                  { value: 'ALL', label: 'All Time' }
-                ].map(item => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setQuickFilter(item.value);
-                      setQuickFilterDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-semibold flex items-center justify-between"
-                  >
-                    <span>{item.label}</span>
-                    {quickFilter === item.value && <Check className="w-2.5 h-2.5 text-emerald-500" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Category Filter */}
-          <div className="relative flex-1 min-w-[80px]">
-            <button
-              type="button"
-              onClick={() => {
-                setCategoryDropdownOpen(prev => !prev);
-                setQuickFilterDropdownOpen(false);
-              }}
-              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between text-[9px] font-bold outline-none text-slate-700 dark:text-slate-200"
-            >
-              <span className="truncate">{category || 'All Categories'}</span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0 ml-0.5" />
-            </button>
-
-            {categoryDropdownOpen && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg max-h-36 overflow-y-auto scrollbar-none py-1 z-40 animate-slideUp text-[9px] min-w-[110px]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCategory('');
-                    setCategoryDropdownOpen(false);
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-extrabold text-slate-400"
-                >
-                  All Categories
-                </button>
-                {CATEGORIES.map(c => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      setCategory(c);
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-semibold flex items-center justify-between truncate"
-                  >
-                    <span className="truncate">{c}</span>
-                    {category === c && <Check className="w-2.5 h-2.5 text-emerald-500" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sort By Filter */}
-          <div className="relative flex-1 min-w-[60px]">
-            <button
-              type="button"
-              onClick={() => {
-                setSortByDropdownOpen(prev => !prev);
-              }}
-              className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between text-[9px] font-bold outline-none text-slate-700 dark:text-slate-200"
-            >
-              <span className="truncate">{sortBy === 'date' ? 'Date' : sortBy === 'amount' ? 'Amount' : 'Desc'}</span>
-              <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0 ml-0.5" />
-            </button>
-
-            {sortByDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-lg py-1 z-40 animate-slideUp min-w-[75px] text-[9px]">
-                {[
-                  { value: 'date', label: 'Date' },
-                  { value: 'amount', label: 'Amount' },
-                  { value: 'description', label: 'Desc' }
-                ].map(item => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => {
-                      setSortBy(item.value);
-                      setSortByDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-semibold flex items-center justify-between"
-                  >
-                    <span>{item.label}</span>
-                    {sortBy === item.value && <Check className="w-2.5 h-2.5 text-emerald-500" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sort Order Direction Toggle */}
+        {/* View Mode Toggle Switcher */}
+        <div className="flex bg-slate-100 dark:bg-zinc-900 p-0.5 rounded-xl border border-slate-200 dark:border-zinc-800 shrink-0 select-none">
           <button
             type="button"
-            onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-            className="p-1.5 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-zinc-900 rounded-lg text-[9px] font-bold shrink-0 text-slate-700 dark:text-slate-200"
+            onClick={() => setViewMode('list')}
+            className={`px-2.5 py-1.5 text-[8.5px] font-extrabold uppercase rounded-lg transition-colors cursor-pointer ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-650 dark:text-zinc-500 dark:hover:text-zinc-350'
+            }`}
           >
-            {sortOrder === 'desc' ? '↓' : '↑'}
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('calendar')}
+            className={`px-2.5 py-1.5 text-[8.5px] font-extrabold uppercase rounded-lg transition-colors cursor-pointer ${
+              viewMode === 'calendar'
+                ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-655 dark:text-zinc-500 dark:hover:text-zinc-350'
+            }`}
+          >
+            Calendar
           </button>
         </div>
       </div>
+
+      {/* 3-Month Column Selector Header (Text list with bottom selection highlight) */}
+      <div className="flex items-center justify-around bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-800 p-2.5 rounded-2xl select-none">
+        {getThreeMonths().map((mInfo, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => {
+              setSelectedMonth(mInfo.month);
+              setSelectedYear(mInfo.year);
+            }}
+            className={`px-1 py-1 text-[10px] font-extrabold uppercase transition-all cursor-pointer ${
+              mInfo.isSelected
+                ? 'text-black dark:text-white border-b-2 border-black dark:border-white font-black scale-105'
+                : 'text-slate-400 dark:text-zinc-500 hover:text-slate-650 dark:hover:text-zinc-350'
+            }`}
+          >
+            {mInfo.name} {mInfo.year}
+          </button>
+        ))}
+      </div>
+
+      {/* Monthly Summary Little Text Block */}
+      <div className="flex items-center justify-between px-2 text-[9px] uppercase font-black tracking-wider text-slate-450 dark:text-zinc-550 select-none">
+        <div>
+          Inflow <span className="text-emerald-500 ml-1">₹{totalIncome.toLocaleString('en-IN')}</span>
+        </div>
+        <div>
+          Outflow <span className="text-rose-500 ml-1">₹{totalExpense.toLocaleString('en-IN')}</span>
+        </div>
+        <div>
+          Net <span className={`${netMonth >= 0 ? 'text-emerald-500' : 'text-rose-500'} ml-1`}>
+            {netMonth >= 0 ? '+' : ''}₹{netMonth.toLocaleString('en-IN')}
+          </span>
+        </div>
+      </div>
+
+      {/* Calendar Grid Container (Visible only in Calendar View) */}
+      {viewMode === 'calendar' && (
+        <div className="bg-white dark:bg-[#18181b] border border-slate-200 dark:border-zinc-800 rounded-3xl p-3.5 space-y-3 shadow-sm select-none animate-fadeIn">
+          {/* Weekdays Header */}
+          <div className="grid grid-cols-7 text-center text-[7.5px] font-black uppercase text-slate-400 dark:text-zinc-500 tracking-wider">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day}>{day}</div>
+            ))}
+          </div>
+
+          {/* Days Grid */}
+          <div className="grid grid-rows-5 gap-y-1.5 border-t border-slate-100 dark:border-zinc-800/60 pt-2.5">
+            {rows.map((row, rIdx) => (
+              <div key={rIdx} className="grid grid-cols-7 gap-x-1.5">
+                {row.map((dayNum, cIdx) => {
+                  if (dayNum === null) {
+                    return <div key={cIdx} className="aspect-square bg-transparent rounded-xl" />;
+                  }
+
+                  const isToday =
+                    new Date().getDate() === dayNum &&
+                    new Date().getMonth() === selectedMonth &&
+                    new Date().getFullYear() === selectedYear;
+
+                  const isSelected = selectedDay === dayNum;
+                  const { net } = getDayDetails(dayNum);
+
+                  let amtColorClass = 'text-slate-400 dark:text-zinc-650';
+                  if (net > 0) amtColorClass = 'text-emerald-500 dark:text-emerald-400 font-bold';
+                  else if (net < 0) amtColorClass = 'text-rose-500 dark:text-rose-400 font-bold';
+
+                  return (
+                    <button
+                      key={cIdx}
+                      type="button"
+                      onClick={() => {
+                        if (selectedDay === dayNum) {
+                          setSelectedDay(null);
+                        } else {
+                          setSelectedDay(dayNum);
+                        }
+                      }}
+                      className={`aspect-square p-0.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between items-center ${
+                        isSelected
+                          ? 'bg-black text-white border-black dark:bg-white dark:text-black dark:border-white shadow-md scale-105'
+                          : isToday
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/20 dark:border-indigo-900/30'
+                          : 'bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border-transparent'
+                      }`}
+                    >
+                      <span className="text-[9px] font-extrabold">{dayNum}</span>
+                      <span className={`text-[7px] uppercase tracking-tighter ${isSelected ? 'text-white/80 dark:text-black/85 font-bold' : amtColorClass}`}>
+                        {net !== 0 ? formatCompactAmount(net) : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Selected Day Filters Info Row */}
+      {selectedDay !== null && (
+        <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-950/15 border border-indigo-100 dark:border-indigo-900/40 px-3 py-1.5 rounded-2xl animate-fadeIn select-none">
+          <span className="text-[9px] font-bold text-indigo-650 dark:text-indigo-400">
+            Showing logs for {selectedDay} {MONTH_NAMES[selectedMonth]} {selectedYear}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedDay(null)}
+            className="text-[9px] font-black text-rose-500 hover:underline cursor-pointer"
+          >
+            Show All Month
+          </button>
+        </div>
+      )}
 
       {/* MOBILE LIST OF NATIVE TRANSACTION CARDS */}
       {loading ? (
@@ -814,7 +937,7 @@ export const Transactions: React.FC = () => {
           <div className="w-6 h-6 border-2 border-black dark:border-white border-t-transparent rounded-full animate-spin" />
           <span className="text-[10px] text-slate-400 font-semibold">Filtering ledgers...</span>
         </div>
-      ) : transactions.length === 0 ? (
+      ) : displayTxns.length === 0 ? (
         <div className="text-center py-12 text-slate-400 text-[10px] font-semibold space-y-1">
           <AlertCircle className="w-6 h-6 mx-auto text-slate-350" />
           <p>No transaction history matched.</p>
@@ -825,7 +948,7 @@ export const Transactions: React.FC = () => {
             if (sortBy === 'date') {
               // Group transactions sequentially by date, preserving backend sorted order
               const groups: { dateStr: string; list: Transaction[] }[] = [];
-              transactions.forEach(t => {
+              displayTxns.forEach(t => {
                 const dateVal = t.transactionDate || (t as any).date;
                 const dateStr = dateVal 
                   ? new Date(dateVal).toISOString().split('T')[0] 
@@ -873,7 +996,7 @@ export const Transactions: React.FC = () => {
               // Flat list of transactions when sorting by amount or description
               return (
                 <div className="space-y-2.5">
-                  {transactions.map(t => renderTransactionTile(t, true))}
+                  {displayTxns.map(t => renderTransactionTile(t, true))}
                 </div>
               );
             }
@@ -903,11 +1026,11 @@ export const Transactions: React.FC = () => {
       {modalOpen && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs select-none">
           
-          <div className={`relative w-full max-w-[340px] bg-white text-[#122325] rounded-[24px] p-5 shadow-xl space-y-4 animate-fadeIn border-l-[6px] border-b-[6px] max-h-[520px] overflow-y-auto scrollbar-none ${
+          <div className={`relative w-full max-w-[340px] bg-white dark:bg-[#18181b] text-[#122325] dark:text-zinc-200 rounded-[24px] p-5 shadow-xl space-y-4 animate-fadeIn border-l-[6px] border-b-[6px] max-h-[520px] overflow-y-auto scrollbar-none ${
             txnType === 'Income'
               ? 'border-[#2fb09b]'
               : txnType === 'Transfer'
-              ? 'border-slate-800'
+              ? 'border-slate-800 dark:border-zinc-700'
               : 'border-[#f56565]'
           }`}>
             {/* Top Close icon */}
@@ -919,7 +1042,7 @@ export const Transactions: React.FC = () => {
                   setModalAdvancedOpen(false);
                   resetForm();
                 }}
-                className="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:text-black hover:bg-slate-100 transition-colors"
+                className="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:text-black hover:bg-slate-100 dark:hover:text-white dark:hover:bg-zinc-800 transition-colors"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -927,21 +1050,21 @@ export const Transactions: React.FC = () => {
             )}
 
             {/* Title */}
-            <h3 className="font-black text-[9px] uppercase tracking-wider text-slate-450">
+            <h3 className="font-black text-[9px] uppercase tracking-wider text-slate-450 dark:text-zinc-500">
               {editingTxn ? 'EDIT TRANSACTION' : 'NEW ENTRY'}
             </h3>
 
             <form onSubmit={handleCreateOrUpdate} className="space-y-4 text-xs font-semibold">
               
               {/* Top Description Input (Borderless & bold) */}
-              <div className="text-[11.5px] font-bold text-slate-750 leading-tight">
+              <div className="text-[11.5px] font-bold text-slate-750 dark:text-zinc-300 leading-tight">
                 <input
                   type="text"
                   required
                   value={desc}
                   onChange={e => { setDesc(e.target.value); setIsDirty(true); }}
                   placeholder={txnType === 'Transfer' ? 'e.g. HDFC to SBI' : 'Description...'}
-                  className="w-full bg-transparent border-none outline-none font-bold text-slate-800 focus:ring-0 p-0"
+                  className="w-full bg-transparent border-none outline-none font-bold text-slate-800 dark:text-zinc-100 focus:ring-0 p-0"
                 />
               </div>
 
@@ -957,14 +1080,14 @@ export const Transactions: React.FC = () => {
                 <div className="flex flex-col items-end">
                   <span className="text-[8px] uppercase tracking-wider text-slate-400 font-extrabold">Amount</span>
                   <div className="flex items-center">
-                    <span className="text-[15px] font-black text-slate-800 mr-0.5">₹</span>
+                    <span className="text-[15px] font-black text-slate-800 dark:text-zinc-300 mr-0.5">₹</span>
                     <input
                       type="number"
                       step="0.01"
                       required
                       value={amount}
                       onChange={e => { setAmount(e.target.value); setIsDirty(true); }}
-                      className="w-20 text-right bg-transparent border-none outline-none font-black text-[16px] text-slate-800 focus:ring-0 p-0"
+                      className="w-20 text-right bg-transparent border-none outline-none font-black text-[16px] text-slate-800 dark:text-zinc-100 focus:ring-0 p-0"
                       placeholder="0.00"
                     />
                   </div>
@@ -988,27 +1111,27 @@ export const Transactions: React.FC = () => {
                       setModalTypeDropdownOpen(prev => !prev);
                       setModalCatDropdownOpen(false);
                     }}
-                    className="w-full px-2 py-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705"
+                    className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-205 dark:border-zinc-800 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-700 dark:text-zinc-300"
                   >
                     <div className="flex items-center space-x-1">
                       {txnType === 'Income' ? (
-                        <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                          <span className="text-[9px] text-emerald-600 font-black">↓</span>
+                        <div className="w-3.5 h-3.5 rounded-full bg-emerald-100 dark:bg-emerald-950/25 flex items-center justify-center shrink-0">
+                          <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-black">↓</span>
                         </div>
                       ) : txnType === 'Transfer' ? (
-                        <div className="w-3.5 h-3.5 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                          <span className="text-[9px] text-slate-600 font-black">⇄</span>
+                        <div className="w-3.5 h-3.5 rounded-full bg-slate-100 dark:bg-zinc-900 flex items-center justify-center shrink-0">
+                          <span className="text-[9px] text-slate-650 dark:text-zinc-400 font-black">⇄</span>
                         </div>
                       ) : (
-                        <div className="w-3.5 h-3.5 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
-                          <span className="text-[9px] text-rose-600 font-black">↑</span>
+                        <div className="w-3.5 h-3.5 rounded-full bg-rose-100 dark:bg-rose-950/25 flex items-center justify-center shrink-0">
+                          <span className="text-[9px] text-rose-600 dark:text-rose-450 font-black">↑</span>
                         </div>
                       )}
                       <span className={
                         txnType === 'Income'
                           ? 'text-[#2fb09b]'
                           : txnType === 'Transfer'
-                          ? 'text-slate-700'
+                          ? 'text-slate-700 dark:text-zinc-300'
                           : 'text-[#f56565]'
                       }>{txnType}</span>
                     </div>
@@ -1016,7 +1139,7 @@ export const Transactions: React.FC = () => {
                   </button>
                   
                   {modalTypeDropdownOpen && (
-                    <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[9px] font-bold">
+                    <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-205 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[9px] font-bold text-slate-700 dark:text-zinc-300">
                       {['Expense', 'Income', 'Transfer', 'Gambling'].map(type => (
                         <button
                           key={type}
@@ -1033,7 +1156,7 @@ export const Transactions: React.FC = () => {
                               setCat('Eating Out/Ordering In');
                             }
                           }}
-                          className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 text-[9px] font-bold flex items-center justify-between text-slate-700"
+                          className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 text-[9px] font-bold flex items-center justify-between text-slate-700 dark:text-zinc-300 transition-colors"
                         >
                           <span>{type}</span>
                           {txnType === type && <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />}
@@ -1052,50 +1175,14 @@ export const Transactions: React.FC = () => {
                       setModalCatDropdownOpen(prev => !prev);
                       setModalTypeDropdownOpen(false);
                     }}
-                    className="w-full px-2 py-1.5 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705"
+                    className="w-full px-2 py-1.5 rounded bg-slate-50 dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 flex items-center justify-between text-[10px] font-extrabold outline-none cursor-pointer text-slate-705 dark:text-zinc-300"
                   >
-                    <div className="flex items-center space-x-1 min-w-0">
-                      {txnType === 'Transfer' ? (
-                        <span className="text-[10px]">⇄</span>
-                      ) : (
-                        cat === 'Salary' || cat === 'Freelancing' || cat === 'Business Income' || cat === 'Freelance/Stipend' ? (
-                          <span className="text-[10px]">💻</span>
-                        ) : cat === 'Eating Out/Ordering In' || cat === 'Groceries' ? (
-                          <span className="text-[10px]">🍔</span>
-                        ) : cat === 'Fuel' || cat === 'Travel' ? (
-                          <span className="text-[10px]">🚗</span>
-                        ) : cat === 'Shopping' ? (
-                          <span className="text-[10px]">🛍️</span>
-                        ) : cat === 'Entertainment' ? (
-                          <span className="text-[10px]">🎬</span>
-                        ) : (
-                          <span className="text-[10px]">📦</span>
-                        )
-                      )}
+                    <div className="flex items-center space-x-1.5 min-w-0">
+                      <span className="text-[10px] shrink-0">{getCategoryEmoji(cat)}</span>
                       <span className="truncate">{cat}</span>
                     </div>
                     <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </button>
-                  
-                  {modalCatDropdownOpen && (
-                    <div className="absolute top-full right-0 w-44 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-36 overflow-y-auto scrollbar-none py-1 z-50 animate-slideUp text-[9px] font-bold">
-                      {(txnType === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => {
-                            setCat(c);
-                            setModalCatDropdownOpen(false);
-                            setIsDirty(true);
-                          }}
-                          className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 text-[9px] font-bold flex items-center justify-between text-slate-700 truncate"
-                        >
-                          <span className="truncate">{c}</span>
-                          {cat === c && <CheckCircle2 className="w-2.5 h-2.5 text-[#2fb09b] shrink-0 ml-1" />}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1111,7 +1198,7 @@ export const Transactions: React.FC = () => {
                           {tagArray.map((tag, idx) => (
                             <span
                               key={idx}
-                              className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold border border-slate-200"
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-650 dark:text-zinc-350 text-[10px] font-bold border border-slate-200 dark:border-zinc-700"
                             >
                               <span>{tag}</span>
                               <button
@@ -1147,13 +1234,13 @@ export const Transactions: React.FC = () => {
                                 }
                               }}
                               onBlur={() => setShowAddTagInput(false)}
-                              className="px-2 py-0.5 rounded-full border border-[#2fb09b] text-[10px] outline-none w-16 bg-white text-slate-800 font-bold"
+                              className="px-2 py-0.5 rounded-full border border-[#2fb09b] text-[10px] outline-none w-16 bg-white dark:bg-zinc-950 text-slate-800 dark:text-zinc-200 font-bold"
                             />
                           ) : (
                             <button
                               type="button"
                               onClick={() => setShowAddTagInput(true)}
-                              className="w-5 h-5 rounded-full bg-slate-100 border border-slate-200 hover:bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 transition"
+                              className="w-5 h-5 rounded-full bg-slate-100 dark:bg-zinc-800 border border-slate-205 dark:border-zinc-700 hover:bg-slate-200 dark:hover:bg-zinc-900 flex items-center justify-center text-[10px] font-bold text-slate-650 dark:text-zinc-350 transition"
                             >
                               +
                             </button>
@@ -1166,7 +1253,7 @@ export const Transactions: React.FC = () => {
               )}
 
               {/* Collapsible Advanced Parameters Toggle */}
-              <div className="pt-1.5 border-t border-slate-100">
+              <div className="pt-1.5 border-t border-slate-100 dark:border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setModalAdvancedOpen(prev => !prev)}
@@ -1190,7 +1277,7 @@ export const Transactions: React.FC = () => {
                             value={acc}
                             onChange={e => { setAcc(e.target.value); setIsDirty(true); }}
                             placeholder="SBI Source"
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-705"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                           />
                         </div>
                         <div className="space-y-0.5">
@@ -1201,7 +1288,7 @@ export const Transactions: React.FC = () => {
                             value={subcat}
                             onChange={e => { setSubcat(e.target.value); setIsDirty(true); }}
                             placeholder="HDFC Destination"
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-705"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                           />
                         </div>
                       </div>
@@ -1217,7 +1304,7 @@ export const Transactions: React.FC = () => {
                             value={acc}
                             onChange={e => { setAcc(e.target.value); setIsDirty(true); }}
                             placeholder="SBI"
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-750"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                           />
                         </div>
                         
@@ -1228,14 +1315,14 @@ export const Transactions: React.FC = () => {
                             onClick={() => {
                               setModalPmDropdownOpen(prev => !prev);
                             }}
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 flex items-center justify-between text-[8.5px] font-bold outline-none cursor-pointer text-slate-750"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 flex items-center justify-between text-[8.5px] font-bold outline-none cursor-pointer text-slate-700 dark:text-zinc-300"
                           >
                             <span>{pm}</span>
                             <ChevronDown className="w-2.5 h-2.5 text-slate-400 shrink-0 ml-1" />
                           </button>
                           
                           {modalPmDropdownOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-32 overflow-y-auto scrollbar-none py-1 z-55 animate-slideUp text-[8.5px] font-bold">
+                            <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-805 rounded-xl shadow-xl max-h-32 overflow-y-auto scrollbar-none py-1 z-55 animate-slideUp text-[8.5px] font-bold text-slate-700 dark:text-zinc-300">
                               {['UPI', 'Cash', 'Credit Card', 'Debit Card', 'Net Banking'].map(method => (
                                 <button
                                   key={method}
@@ -1245,7 +1332,7 @@ export const Transactions: React.FC = () => {
                                     setModalPmDropdownOpen(false);
                                     setIsDirty(true);
                                   }}
-                                  className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 text-[8.5px] font-bold flex items-center justify-between text-slate-700"
+                                  className="w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-800 text-[8.5px] font-bold flex items-center justify-between text-slate-700 dark:text-zinc-300 transition-colors"
                                 >
                                   <span>{method}</span>
                                   {pm === method && <Check className="w-2.5 h-2.5 text-emerald-500 shrink-0" />}
@@ -1262,7 +1349,7 @@ export const Transactions: React.FC = () => {
                       <div className="grid grid-cols-2 gap-2.5">
                         <div className="space-y-0.5">
                           <span className="text-[7.5px] uppercase font-extrabold text-slate-400 flex items-center space-x-0.5">
-                            <Plus className="w-2.5 h-2.5 text-slate-400" />
+                            <Plus className="w-2.5 h-2.5 text-slate-405" />
                             <span>Merchant</span>
                           </span>
                           <input
@@ -1270,13 +1357,13 @@ export const Transactions: React.FC = () => {
                             value={merchantName}
                             onChange={e => { setMerchantName(e.target.value); setIsDirty(true); }}
                             placeholder="e.g. Dominos"
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-slate-705"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-slate-700 dark:text-zinc-300"
                           />
                         </div>
 
                         <div className="space-y-0.5">
                           <span className="text-[7.5px] uppercase font-extrabold text-slate-400 flex items-center space-x-0.5">
-                            <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                            <MapPin className="w-2.5 h-2.5 text-slate-405" />
                             <span>Location</span>
                           </span>
                           <input
@@ -1284,7 +1371,7 @@ export const Transactions: React.FC = () => {
                             value={location}
                             onChange={e => { setLocation(e.target.value); setIsDirty(true); }}
                             placeholder="e.g. Karimpur"
-                            className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none text-slate-705"
+                            className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none text-slate-700 dark:text-zinc-300"
                           />
                         </div>
                       </div>
@@ -1298,7 +1385,7 @@ export const Transactions: React.FC = () => {
                         onChange={e => { setNotes(e.target.value); setIsDirty(true); }}
                         placeholder="Additional details..."
                         rows={2}
-                        className="w-full px-2 py-1 rounded bg-slate-50 border border-slate-200 outline-none resize-none text-slate-750 font-bold"
+                        className="w-full px-2 py-1 rounded bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 outline-none resize-none text-slate-700 dark:text-zinc-300 font-bold"
                       />
                     </div>
 
@@ -1338,7 +1425,7 @@ export const Transactions: React.FC = () => {
                           ) : (
                             <label
                               htmlFor="modal-receipt-uploader"
-                              className="w-full px-2.5 py-2 text-[10px] rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-center space-x-1 cursor-pointer font-bold outline-none text-slate-500"
+                              className="w-full px-2.5 py-2 text-[10px] rounded-xl border border-slate-205 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950 hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors flex items-center justify-center space-x-1 cursor-pointer font-bold outline-none text-slate-500 dark:text-zinc-400"
                             >
                               <span>Upload File</span>
                             </label>
@@ -1375,7 +1462,7 @@ export const Transactions: React.FC = () => {
                                     setIsDirty(true);
                                   }}
                                   placeholder="Product"
-                                  className="flex-[2] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] text-slate-750"
+                                  className="flex-[2] px-1.5 py-0.5 rounded bg-slate-50 dark:bg-zinc-955/20 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] text-slate-700 dark:text-zinc-300"
                                 />
                                 <input
                                   type="number"
@@ -1390,7 +1477,7 @@ export const Transactions: React.FC = () => {
                                     setAmount(String(newSum));
                                   }}
                                   placeholder="0.00"
-                                  className="flex-[1] px-1.5 py-0.5 rounded bg-slate-50 border border-slate-200 outline-none text-[8.5px] font-bold text-slate-750"
+                                  className="flex-[1] px-1.5 py-0.5 rounded bg-slate-50 dark:bg-zinc-955/20 border border-slate-200 dark:border-zinc-800 outline-none text-[8.5px] font-bold text-slate-700 dark:text-zinc-300"
                                 />
                                 <button
                                   type="button"
@@ -1417,13 +1504,40 @@ export const Transactions: React.FC = () => {
 
               {/* Action Buttons Star, Commit / Cancel */}
               <div className="flex justify-between items-center pt-2.5 border-t border-slate-100 mt-1">
-                <button
-                  type="button"
-                  onClick={() => { setFavorite(prev => !prev); setIsDirty(true); }}
-                  className="p-1.5 hover:bg-slate-50 rounded-full transition"
-                >
-                  <Star className={`w-4 h-4 transition ${favorite ? 'fill-amber-400 text-amber-400' : 'text-slate-400 hover:text-amber-400'}`} />
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    type="button"
+                    onClick={() => { setFavorite(prev => !prev); setIsDirty(true); }}
+                    className="p-1.5 hover:bg-slate-50 rounded-full transition"
+                  >
+                    <Star className={`w-4.5 h-4.5 transition ${favorite ? 'fill-amber-400 text-amber-400' : 'text-slate-400 hover:text-amber-400'}`} />
+                  </button>
+                  {editingTxn && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleDuplicate(editingTxn);
+                        }}
+                        className="px-2.5 py-1 text-[9px] font-bold border border-slate-200 hover:bg-slate-100 rounded-lg transition text-slate-705 dark:text-zinc-350 dark:border-zinc-800"
+                        title="Duplicate"
+                      >
+                        Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setModalOpen(false);
+                          handleDelete(editingTxn.id);
+                        }}
+                        className="px-2.5 py-1 text-[9px] font-bold border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-lg transition"
+                        title="Delete"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </div>
                 
                 <div className="flex items-center space-x-3">
                   <button
@@ -1444,12 +1558,78 @@ export const Transactions: React.FC = () => {
                     className="p-1.5 hover:bg-slate-50 rounded-full transition text-slate-400 hover:text-rose-500"
                     title="Cancel"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-4.5 h-4.5" />
                   </button>
                 </div>
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button (FAB) overlay */}
+      <button
+        type="button"
+        onClick={() => { resetForm(); setModalOpen(true); }}
+        className="absolute bottom-20 right-4 w-12 h-12 rounded-full bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center z-40 shadow-lg border dark:border-white/10"
+        title="Add Transaction"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* Category bottom sheet overlay */}
+      {modalCatDropdownOpen && (
+        <div className="absolute inset-0 z-[60] bg-black/45 backdrop-blur-xs flex flex-col justify-end select-none animate-fadeIn">
+          {/* Click outside to close */}
+          <div className="absolute inset-0 -z-10" onClick={() => setModalCatDropdownOpen(false)} />
+          
+          {/* Sliding Sheet */}
+          <div className="w-full bg-white dark:bg-[#18181b] border-t border-slate-200 dark:border-zinc-800 rounded-t-[28px] p-5 shadow-2xl flex flex-col max-h-[70%] animate-slideUp">
+            {/* Pull bar indicator */}
+            <div className="w-10 h-1 bg-slate-300 dark:bg-zinc-700 rounded-full mx-auto mb-4 shrink-0" />
+            
+            {/* Title */}
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-450 dark:text-zinc-500">
+                Select Category ({txnType})
+              </h4>
+              <button
+                type="button"
+                onClick={() => setModalCatDropdownOpen(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-black dark:hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            {/* Grid list of categories */}
+            <div className="grid grid-cols-3 gap-2 overflow-y-auto scrollbar-none pb-6">
+              {(txnType === 'Income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES).map(c => {
+                const isSelected = cat === c;
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      setCat(c);
+                      setModalCatDropdownOpen(false);
+                      setIsDirty(true);
+                    }}
+                    className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all cursor-pointer space-y-1 ${
+                      isSelected
+                        ? 'bg-black text-white border-black dark:bg-white dark:text-black dark:border-white shadow-md scale-105'
+                        : 'bg-slate-50 dark:bg-zinc-950 hover:bg-slate-100 dark:hover:bg-zinc-900 border-transparent text-slate-700 dark:text-zinc-350'
+                    }`}
+                  >
+                    <span className="text-[20px]">{getCategoryEmoji(c)}</span>
+                    <span className="text-[8.5px] font-bold text-center leading-tight truncate w-full">
+                      {c}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

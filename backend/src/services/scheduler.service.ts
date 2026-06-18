@@ -73,6 +73,8 @@ export class SchedulerService {
           nextDate.setDate(nextDate.getDate() + 7);
         } else if (schedule.frequency === 'MONTHLY') {
           nextDate.setMonth(nextDate.getMonth() + 1);
+        } else if (schedule.frequency === 'YEARLY') {
+          nextDate.setFullYear(nextDate.getFullYear() + 1);
         } else {
           // Fallback monthly
           nextDate.setMonth(nextDate.getMonth() + 1);

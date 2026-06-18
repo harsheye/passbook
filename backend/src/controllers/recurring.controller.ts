@@ -325,6 +325,9 @@ function calculateNextRunDate(currentDate: Date, frequency: string, tags: string
   } else if (frequency === 'MONTHLY') {
     nextDate.setMonth(nextDate.getMonth() + 1);
     return nextDate;
+  } else if (frequency === 'YEARLY') {
+    nextDate.setFullYear(nextDate.getFullYear() + 1);
+    return nextDate;
   }
   nextDate.setMonth(nextDate.getMonth() + 1);
   return nextDate;

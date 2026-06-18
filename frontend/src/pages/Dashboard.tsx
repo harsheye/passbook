@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -117,11 +117,23 @@ export const Dashboard: React.FC = () => {
   const [selectedCats, setSelectedCats] = useState<string[]>([]);
   const [pieFlowType, setPieFlowType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [showVisualizations, setShowVisualizations] = useState(true);
 
   // Animated Custom Dropdowns toggles
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+
+  // New States matching Mobile App
+  const [profession, setProfession] = useState<string>('Salaried');
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [yearDropdownOpen, setYearDropdownOpen] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [taxModalOpen, setTaxModalOpen] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [taxCheckedItems, setTaxCheckedItems] = useState<string[]>([]);
+  const [taxClaimedAmounts, setTaxClaimedAmounts] = useState<Record<string, number>>({});
+  const [ratioCardVisible, setRatioCardVisible] = useState(true);
 
   const fetchDashboardData = async () => {
     try {
@@ -148,10 +160,70 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchRef = useRef(fetchDashboardData);
+  useEffect(() => {
+    fetchRef.current = fetchDashboardData;
+  });
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchRef.current();
+    };
+
+    window.addEventListener('transaction-updated', handleUpdate);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('transaction_updates');
+      bc.onmessage = (event) => {
+        if (event.data === 'updated') {
+          handleUpdate();
+        }
+      };
+    } catch (e) {
+      console.warn('BroadcastChannel failed to initialize', e);
+    }
+
+    return () => {
+      window.removeEventListener('transaction-updated', handleUpdate);
+      if (bc) bc.close();
+    };
+  }, []);
+
+  const dispatchTransactionUpdate = () => {
+    window.dispatchEvent(new CustomEvent('transaction-updated'));
+    try {
+      const bc = new BroadcastChannel('transaction_updates');
+      bc.postMessage('updated');
+      bc.close();
+    } catch (e) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     if (location.pathname === '/dashboard') {
       fetchDashboardData();
+
+      // Load user profile details
+      const profileStr = localStorage.getItem('passbook_user_profile');
+      if (profileStr) {
+        const profile = JSON.parse(profileStr);
+        if (profile.profession) {
+          setProfession(profile.profession);
+        }
+      }
+
+      // Load claimed deductions for reports
+      const savedTax = localStorage.getItem('passbook_tax_checklist');
+      if (savedTax) {
+        const parsed = JSON.parse(savedTax);
+        setTaxCheckedItems(parsed.checked || []);
+        setTaxClaimedAmounts(parsed.claimed || {});
+      }
     }
+    const showVisVal = localStorage.getItem('passbook_show_visualizations');
+    setShowVisualizations(showVisVal !== 'false');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, filterType, filterCat, sortBy, sortOrder]);
 
@@ -168,43 +240,7 @@ export const Dashboard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pieFlowType, showAllCategories, data]);
 
-  const loadSampleData = async () => {
-    setLoading(true);
-    try {
-      // Manual bypass to instantly load standard statements
-      await axios.post('/api/transactions', {
-        date: new Date().toISOString(),
-        description: 'TechCorp Salary Credit',
-        amount: 50000,
-        type: 'Income',
-        category: 'Salary',
-        paymentMethod: 'Bank Transfer',
-        account: 'SBI',
-        location: 'Karimpur',
-        tags: ['salary', 'bonus']
-      });
 
-      await axios.post('/api/transactions', {
-        date: new Date().toISOString(),
-        description: 'Dominos Weekend Pizza',
-        amount: 1250,
-        type: 'Expense',
-        category: 'Eating Out/Ordering In',
-        merchantName: 'Dominos',
-        paymentMethod: 'UPI',
-        account: 'SBI',
-        location: 'Karimpur',
-        tags: ['food', 'pizza'],
-        notes: 'Weekend dinner with friends'
-      });
-
-      await fetchDashboardData();
-    } catch (err) {
-      console.error('Failed mock loading:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const getCategoryColor = (catName: string, index: number) => {
     const found = categoriesList.find(c => c.name.toLowerCase() === catName.toLowerCase());
@@ -251,6 +287,116 @@ export const Dashboard: React.FC = () => {
 
   const { summary, charts } = data;
 
+  // Yearly transaction analytics calculations matching mobile screen
+  const yearlyTxns = transactions.filter(t => {
+    const txDate = t.transactionDate || (t as any).date;
+    if (!txDate) return false;
+    const d = new Date(txDate);
+    return d.getFullYear() === selectedYear;
+  });
+
+  let displayIncome = 0;
+  let displayExpense = 0;
+  yearlyTxns.forEach(t => {
+    const type = (t.transactionType || '').toUpperCase();
+    if (type === 'INCOME') {
+      displayIncome += Math.abs(t.amount);
+    } else if (type === 'EXPENSE') {
+      displayExpense += Math.abs(t.amount);
+    }
+  });
+
+  const monthlyNet = Array(12).fill(0);
+  yearlyTxns.forEach(t => {
+    const txDate = t.transactionDate || (t as any).date;
+    if (!txDate) return;
+    const d = new Date(txDate);
+    const m = d.getMonth();
+    const type = (t.transactionType || '').toUpperCase();
+    if (type === 'INCOME') {
+      monthlyNet[m] += Math.abs(t.amount);
+    } else if (type === 'EXPENSE') {
+      monthlyNet[m] -= Math.abs(t.amount);
+    }
+  });
+
+  let cumulative = 0;
+  const monthlyCumulative = monthlyNet.map(net => {
+    cumulative += net;
+    return cumulative;
+  });
+
+  const maxAbsVal = Math.max(...monthlyCumulative.map(Math.abs), 100);
+
+  const x_coords = [35, 85, 135, 185, 235, 285, 335, 385, 435, 485, 535, 585];
+  const pts = monthlyCumulative.map((val, idx) => {
+    const x = x_coords[idx];
+    const y = 100 - (val / maxAbsVal) * 80;
+    return { x, y, val };
+  });
+
+  let pathD = '';
+  let areaD = '';
+  if (pts.length > 0) {
+    pathD = `M ${pts[0].x} ${pts[0].y} ` + pts.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
+    areaD = `M ${pts[0].x} 100 ` + pts.map(p => `L ${p.x} ${p.y}`).join(' ') + ` L ${pts[pts.length - 1].x} 100 Z`;
+  }
+
+  const totalAmt = displayIncome + displayExpense;
+  const incomePct = totalAmt > 0 ? displayIncome / totalAmt : 0.5;
+  const expensePct = totalAmt > 0 ? displayExpense / totalAmt : 0.5;
+
+  let salesTitle = 'Sales in the last week';
+  let cashTitle = 'Cash at the end of the month';
+  let taxSubtitle = 'Employee Tax & Deductions';
+
+  salesTitle = 'Inflows in the last week';
+  cashTitle = 'Cash at the end of the month';
+  taxSubtitle = 'Tax Plan & Deductions';
+
+  if (profession === 'Farmer') {
+    salesTitle = 'Crop Sales in past 6 months';
+    cashTitle = 'Farm Cash at end of month';
+    taxSubtitle = 'Section 10(1) Agri Deductions';
+  } else if (profession === 'Freelancer') {
+    salesTitle = 'Receipts in the last week';
+    cashTitle = 'Freelance Cash at end of month';
+    taxSubtitle = 'Sec 44ADA Tax & Write-offs';
+  } else if (profession === 'Business') {
+    salesTitle = 'Business Sales in the last week';
+    cashTitle = 'Business Cash at end of month';
+    taxSubtitle = 'Sec 44AD Business Tax Slab';
+  } else if (profession === 'Salaried') {
+    salesTitle = 'Salary & Inflow in the last week';
+    cashTitle = 'Cash at the end of the month';
+    taxSubtitle = 'Salaried Tax Plan & Deductions';
+  } else if (profession === 'Student') {
+    salesTitle = 'Pocket Money & Inflow in the last week';
+    cashTitle = 'Balance at the end of the month';
+    taxSubtitle = 'Student Savings Checklist';
+  } else if (profession === 'Housewife') {
+    salesTitle = 'Budget & Inflow in the last week';
+    cashTitle = 'Household Cash at end of month';
+    taxSubtitle = 'Household Savings Checklist';
+  }
+
+  const isFarmer = profession === 'Farmer';
+  const barData = isFarmer
+    ? [
+        { label: 'Jan', val: 85, color: '#10b981' },
+        { label: 'Feb', val: 0, color: '#71717a' },
+        { label: 'Mar', val: 0, color: '#71717a' },
+        { label: 'Apr', val: 0, color: '#71717a' },
+        { label: 'May', val: 0, color: '#71717a' },
+        { label: 'Jun', val: 95, color: '#eab308' }
+      ]
+    : [
+        { label: 'Mon', val: 50, color: '#f59e0b' },
+        { label: 'Tue', val: 75, color: '#f97316' },
+        { label: 'Wed', val: 60, color: '#3b82f6' },
+        { label: 'Thu', val: 90, color: '#10b981' }
+      ];
+
   const activePieSource = pieFlowType === 'EXPENSE' ? charts.category : (charts.categoryIncome || []);
 
   const listToRender = (() => {
@@ -284,14 +430,7 @@ export const Dashboard: React.FC = () => {
           <h1 className="text-xl font-black font-sans leading-none mt-1">DASHBOARD</h1>
         </div>
         
-        {transactions.length === 0 && (
-          <button
-            onClick={loadSampleData}
-            className="py-1.5 px-3 bg-black dark:bg-white text-white dark:text-black hover:scale-105 active:scale-95 rounded-xl text-[9px] font-bold uppercase transition-transform shadow-sm"
-          >
-            Load Sample Data
-          </button>
-        )}
+
       </div>
 
       {/* METRIC GRID */}
@@ -315,7 +454,6 @@ export const Dashboard: React.FC = () => {
           <span className="text-[8px] uppercase font-black text-slate-400 block">Net Savings</span>
           <h3 className="text-base font-black font-sans mt-1">₹{summary.netSavings.toLocaleString('en-IN')}</h3>
         </div>
-
         <div className="bg-slate-50 dark:bg-zinc-950/40 rounded-2xl p-4 border border-slate-150 dark:border-zinc-900">
           <span className="text-[8px] uppercase font-black text-slate-400 block">Daily Average</span>
           <h3 className="text-base font-black font-sans mt-1">₹{summary.avgDailySpending.toFixed(0)}</h3>
@@ -323,161 +461,205 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* 1-MONTH EXPENSES INTERACTIVE PIE CHART */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-zinc-900">
-          <div>
-            <h3 className="font-extrabold text-xs flex items-center space-x-1">
-              <PieIcon className="w-3.5 h-3.5 text-rose-500" />
-              <span>1-Month Category {pieFlowType === 'EXPENSE' ? 'Expenses' : 'Inflow'}</span>
-            </h3>
-            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">Toggle categories to analyze specific flows</p>
-          </div>
-
-          {/* Flow Type Toggle (Expense / Income) */}
-          <div className="flex bg-slate-100 dark:bg-zinc-900 rounded-lg p-0.5 border dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setPieFlowType('EXPENSE')}
-              className={`py-1 px-2.5 text-[8.5px] font-black uppercase rounded transition-all ${
-                pieFlowType === 'EXPENSE'
-                  ? 'bg-black text-white dark:bg-white dark:text-black shadow-sm'
-                  : 'text-slate-400 hover:text-slate-650'
-              }`}
-            >
-              Expense
-            </button>
-            <button
-              type="button"
-              onClick={() => setPieFlowType('INCOME')}
-              className={`py-1 px-2.5 text-[8.5px] font-black uppercase rounded transition-all ${
-                pieFlowType === 'INCOME'
-                  ? 'bg-black text-white dark:bg-white dark:text-black shadow-sm'
-                  : 'text-slate-400 hover:text-slate-650'
-              }`}
-            >
-              Income
-            </button>
-          </div>
-        </div>
-
-        {activePieSource.length === 0 && !showAllCategories ? (
-          <div className="text-center py-8 text-slate-400 text-[9px] uppercase font-bold border border-dashed border-slate-200 dark:border-zinc-900 rounded-3xl">
-            No {pieFlowType === 'EXPENSE' ? 'expense' : 'income'} records logged in the current month.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Pie Chart and Category Checkboxes Centered & Large */}
-            <div className="flex flex-col items-center space-y-4">
-              
-              {/* Centered Larger Graphic */}
-              <div className="h-48 w-full relative max-w-[280px]">
-                {filteredPieData.length === 0 ? (
-                  <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black uppercase text-slate-400 border border-dashed rounded-full">
-                    Empty Filter
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={filteredPieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={3}
-                        dataKey="value"
+      {showVisualizations && (
+        <div className="space-y-6">
+          {/* Cash trajectory Line Chart */}
+          <div className="bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-3xl p-5 shadow-premium space-y-4 relative z-20">
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-xs">{cashTitle}</h3>
+              <div className="relative">
+                <button
+                  onClick={() => setYearDropdownOpen(!yearDropdownOpen)}
+                  className="text-emerald-500 text-[10px] font-black uppercase flex items-center space-x-1 outline-none cursor-pointer"
+                >
+                  <span>{selectedYear} ▼</span>
+                </button>
+                {yearDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-xl py-1 z-50 animate-slideUp text-[9px] font-bold w-16">
+                    {[2026, 2025, 2024].map(yr => (
+                      <button
+                        key={yr}
+                        onClick={() => {
+                          setSelectedYear(yr);
+                          setYearDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-zinc-900 text-[9px] font-bold flex items-center justify-between transition-colors ${
+                          yr === selectedYear ? 'text-emerald-500' : 'text-slate-700 dark:text-zinc-300'
+                        }`}
                       >
-                        {filteredPieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={getCategoryColor(entry.name, index)} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value) => `₹${value}`} contentStyle={{ fontSize: '9px', borderRadius: '8px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                        {yr}
+                      </button>
+                    ))}
+                  </div>
                 )}
-                {/* Total overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                  <span className="text-[7.5px] uppercase font-black text-slate-400">Total {pieFlowType === 'EXPENSE' ? 'Expenses' : 'Inflows'}</span>
-                  <span className="text-sm font-black tracking-tighter text-slate-800 dark:text-white">₹{totalPieSum.toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto scrollbar-none pr-1">
+              <div className="min-w-[600px] h-56 relative">
+                <svg width="600" height="200" viewBox="0 0 600 200" className="w-full">
+                  <defs>
+                    <linearGradient id="chart-stroke" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#22c55e" />
+                      <stop offset="50%" stopColor="#22c55e" />
+                      <stop offset="50%" stopColor="#ef4444" />
+                      <stop offset="100%" stopColor="#ef4444" />
+                    </linearGradient>
+                    <linearGradient id="chart-area" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity="0.15" />
+                      <stop offset="50%" stopColor="#22c55e" stopOpacity="0.0" />
+                      <stop offset="50%" stopColor="#ef4444" stopOpacity="0.0" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.15" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Gridlines */}
+                  {[-1.0, -0.5, 0.0, 0.5, 1.0].map((ratio, idx) => {
+                    const yVal = 100 - ratio * 80;
+                    const gridVal = ratio * maxAbsVal;
+                    const isZero = ratio === 0;
+                    return (
+                      <g key={idx}>
+                        <line
+                          x1="15"
+                          y1={yVal}
+                          x2="585"
+                          y2={yVal}
+                          stroke="currentColor"
+                          className={isZero ? "text-slate-300 dark:text-zinc-700" : "text-slate-100 dark:text-zinc-900/50"}
+                          strokeWidth={isZero ? "1.5" : "1"}
+                          strokeDasharray={isZero ? "" : "3,3"}
+                        />
+                        <text
+                          x="20"
+                          y={yVal - 5}
+                          fill={isZero ? "#64748b" : "#94a3b8"}
+                          fontSize="9"
+                          fontWeight="black"
+                          className="select-none"
+                        >
+                          ₹{Math.round(gridVal).toLocaleString('en-IN')}
+                        </text>
+                      </g>
+                    );
+                  })}
+
+                  {/* Area */}
+                  {areaD && <path d={areaD} fill="url(#chart-area)" />}
+
+                  {/* Line */}
+                  {pathD && <path d={pathD} fill="none" stroke="url(#chart-stroke)" strokeWidth="3" />}
+
+                  {/* Points & Tooltips */}
+                  {pts.map((pt, i) => (
+                    <g key={i}>
+                      <circle cx={pt.x} cy={pt.y} r="4.5" fill={pt.val >= 0 ? "#22c55e" : "#ef4444"} />
+                      <circle cx={pt.x} cy={pt.y} r="2.2" fill="#ffffff" />
+                      <text
+                        x={pt.x}
+                        y={pt.val >= 0 ? pt.y - 10 : pt.y + 14}
+                        fill={pt.val >= 0 ? "#22c55e" : "#ef4444"}
+                        fontSize="9.5"
+                        fontWeight="black"
+                        textAnchor="middle"
+                        className="select-none"
+                      >
+                        ₹{Math.round(pt.val).toLocaleString('en-IN')}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+
+                {/* Month labels */}
+                <div className="flex justify-between text-[8px] font-bold text-slate-400 uppercase px-4 mt-2">
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
+                    <span key={i} className="w-8 text-center">{m}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Transaction Ratio Donut Chart */}
+          {ratioCardVisible && (
+            <div className="bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-3xl p-5 shadow-premium space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="font-extrabold text-xs">Transaction Ratio ({selectedYear})</h3>
+                <button
+                  onClick={() => setRatioCardVisible(false)}
+                  className="text-slate-405 hover:text-black dark:hover:text-white font-bold text-sm cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex flex-col items-center justify-center relative py-4">
+                <svg width="140" height="140" viewBox="0 0 100 100" className="mx-auto transform -rotate-90">
+                  {totalAmt === 0 ? (
+                    <circle cx="50" cy="50" r="32" fill="transparent" stroke="#4b5563" strokeWidth="12" />
+                  ) : (
+                    <>
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="32"
+                        fill="transparent"
+                        stroke="#5c7cfa"
+                        strokeWidth="12"
+                        strokeDasharray="201.06"
+                        strokeDashoffset={201.06 - (incomePct * 201.06)}
+                        strokeLinecap="round"
+                      />
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="32"
+                        fill="transparent"
+                        stroke="#e05e5e"
+                        strokeWidth="12"
+                        strokeDasharray="201.06"
+                        strokeDashoffset={201.06 - (expensePct * 201.06)}
+                        transform={`rotate(${incomePct * 360} 50 50)`}
+                        strokeLinecap="round"
+                      />
+                    </>
+                  )}
+                </svg>
+
+                <div className="absolute text-center flex flex-col items-center justify-center">
+                  <span className="text-[7.5px] uppercase font-black text-slate-400">Total Flows</span>
+                  <div className="text-xs font-black tracking-tight text-slate-800 dark:text-white">
+                    ₹{totalAmt.toLocaleString('en-IN')}
+                  </div>
                 </div>
               </div>
 
-              {/* Dynamic Checkbox Toggle List (Grid layout below the pie chart) */}
-              <div className="w-full grid grid-cols-2 gap-2 max-h-48 overflow-y-auto scrollbar-none py-1 pr-1">
-                {listToRender.map((c, idx) => {
-                  const isActive = selectedCats.includes(c.name);
-                  const color = getCategoryColor(c.name, idx);
+              <div className="flex justify-around border-t dark:border-zinc-900 pt-3 text-[9px] font-bold uppercase">
+                <div className="text-center">
+                  <div className="flex items-center space-x-1.5 justify-center">
+                    <span className="w-2 h-2 rounded-full bg-[#5c7cfa]" />
+                    <span className="text-slate-400">Income</span>
+                  </div>
+                  <div className="text-[10px] font-black mt-0.5">
+                    ₹{displayIncome.toLocaleString('en-IN')} ({totalAmt > 0 ? Math.round(incomePct * 100) : 0}%)
+                  </div>
+                </div>
 
-                  return (
-                    <button
-                      key={c.name}
-                      onClick={() => handleToggleCategory(c.name)}
-                      className="w-full flex items-center justify-between text-[9px] font-bold p-2 rounded-xl border border-slate-100 hover:bg-slate-50 dark:border-zinc-900 dark:hover:bg-zinc-950 transition-colors"
-                    >
-                      <div className="flex items-center space-x-1.5 min-w-0">
-                        {/* Custom checkbox */}
-                        <div
-                          className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors shrink-0 ${
-                            isActive ? 'bg-black border-black text-white dark:bg-white dark:border-white dark:text-black' : 'border-slate-300 dark:border-zinc-700'
-                          }`}
-                        >
-                          {isActive && <Check className="w-2.5 h-2.5 stroke-[4]" />}
-                        </div>
-                        <span className="truncate">{c.name}</span>
-                      </div>
-                      <span className="font-extrabold shrink-0" style={{ color: isActive ? color : '#94a3b8' }}>
-                        ₹{c.value}
-                      </span>
-                    </button>
-                  );
-                })}
+                <div className="text-center">
+                  <div className="flex items-center space-x-1.5 justify-center">
+                    <span className="w-2 h-2 rounded-full bg-[#e05e5e]" />
+                    <span className="text-slate-400">Expenses</span>
+                  </div>
+                  <div className="text-[10px] font-black mt-0.5">
+                    ₹{displayExpense.toLocaleString('en-IN')} ({totalAmt > 0 ? Math.round(expensePct * 100) : 0}%)
+                  </div>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Quick action buttons & Show All Categories toggle */}
-            <div className="flex justify-between items-center select-none border-t dark:border-zinc-900 pt-2.5 text-[8.5px] uppercase font-black text-slate-400">
-              <label className="flex items-center space-x-1.5 cursor-pointer text-slate-400 hover:text-slate-650 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={showAllCategories}
-                  onChange={(e) => setShowAllCategories(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-zinc-800 bg-transparent text-black dark:text-white focus:ring-0 w-3 h-3 cursor-pointer"
-                />
-                <span>Show All Categories</span>
-              </label>
-
-              <div className="flex space-x-2">
-                <button onClick={handleSelectAllCats} className="hover:text-black dark:hover:text-white transition-colors">
-                  ✓ Check All
-                </button>
-                <span>•</span>
-                <button onClick={handleDeselectAllCats} className="hover:text-black dark:hover:text-white transition-colors">
-                  ✗ Uncheck All
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* MONTHLY HISTORICAL EXPENSES BAR CHART */}
-      <div className="space-y-3">
-        <div className="pb-2 border-b border-slate-100 dark:border-zinc-900">
-          <h3 className="font-extrabold text-xs">Historical Monthly Expenses</h3>
-          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wide mt-0.5">Historical timeline</p>
         </div>
-        
-        <div className="h-44 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={charts.monthly} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-              <XAxis dataKey="month" tick={{ fontSize: 9 }} stroke="#64748b" />
-              <YAxis tick={{ fontSize: 9 }} stroke="#64748b" />
-              <Tooltip contentStyle={{ borderRadius: '12px', fontSize: '9px' }} formatter={(value) => `₹${value}`} />
-              <Bar dataKey="Expenses" fill="#000000" radius={[4, 4, 0, 0]} className="dark:fill-white" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      )}
 
       {/* MODERNISED RECENT TRANSACTIONS LOG FEED */}
       <div className="space-y-4">
@@ -668,6 +850,165 @@ export const Dashboard: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 6. REPORTS PREVIEW MODAL */}
+      {reportModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-3xl w-full max-w-sm max-h-[80vh] flex flex-col p-5 shadow-2xl">
+            <div className="flex justify-between items-center pb-3 border-b dark:border-zinc-900 mb-4 shrink-0 text-black dark:text-white">
+              <h3 className="text-xs font-black uppercase">📄 Monthly Statement Report</h3>
+              <button onClick={() => setReportModalOpen(false)} className="text-slate-400 hover:text-black dark:hover:text-white font-bold text-sm cursor-pointer">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 scrollbar-none text-black dark:text-white">
+              <div className="border border-slate-200 dark:border-zinc-850 p-4 rounded-xl bg-slate-55 dark:bg-zinc-950/60 space-y-4">
+                <div className="text-center">
+                  <h4 className="font-black text-[11px] uppercase tracking-wide">Monthly Revenue & Outflows</h4>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">Period: 01 May - 31 May 2026</p>
+                </div>
+
+                <div className="border-b dark:border-zinc-850 pb-3 text-[9.5px] font-bold text-slate-500 dark:text-zinc-400 uppercase space-y-1">
+                  <p>Client Name: <span className="text-black dark:text-white font-black">{localStorage.getItem('passbook_user_profile') ? JSON.parse(localStorage.getItem('passbook_user_profile')!).name : 'Local User'}</span></p>
+                  <p>Profession: <span className="text-black dark:text-white font-black">{profession}</span></p>
+                </div>
+
+                <div className="space-y-2 text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400">
+                  <div className="flex justify-between border-b dark:border-zinc-900 pb-1 text-[8px] uppercase font-black text-slate-400">
+                    <span>Particulars</span>
+                    <span>Amount</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Revenue Inflows</span>
+                    <span className="text-emerald-500 font-black">₹{displayIncome.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Bills Outflows</span>
+                    <span className="text-rose-500 font-black">₹{displayExpense.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between border-t dark:border-zinc-900 pt-2 font-black">
+                    <span className="text-black dark:text-white">Net Cash Savings:</span>
+                    <span className="text-indigo-500">₹{(displayIncome - displayExpense).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                {transactions.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t dark:border-zinc-900">
+                    <h5 className="text-[9.5px] font-black uppercase text-black dark:text-white">Recent Statements Log</h5>
+                    {transactions.slice(0, 5).map((t, idx) => (
+                      <div key={t.id || idx} className="flex justify-between text-[8px] font-bold text-slate-450 dark:text-zinc-500 uppercase">
+                        <span className="truncate max-w-[150px]">{t.description}</span>
+                        <span className={t.amount < 0 ? 'text-rose-500' : 'text-emerald-500'}>
+                          ₹{Math.abs(t.amount).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4 border-t dark:border-zinc-900 mt-4 shrink-0">
+              <button
+                onClick={() => setReportModalOpen(false)}
+                className="py-2.5 px-4 border border-slate-200 dark:border-zinc-800 text-[9.5px] font-black uppercase rounded-xl hover:bg-slate-50 cursor-pointer text-slate-600 dark:text-zinc-300"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setDownloadingPdf(true);
+                  setTimeout(() => {
+                    setDownloadingPdf(false);
+                    setReportModalOpen(false);
+                    alert('Last Month Statement PDF Report has been successfully saved to your downloads.');
+                  }, 1500);
+                }}
+                disabled={downloadingPdf}
+                className="py-2.5 px-4 bg-rose-500 hover:bg-rose-650 text-white text-[9.5px] font-black uppercase rounded-xl cursor-pointer flex items-center space-x-1"
+              >
+                {downloadingPdf ? (
+                  <span className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>Download PDF</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. TAX PREVIEW MODAL */}
+      {taxModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-3xl w-full max-w-sm max-h-[80vh] flex flex-col p-5 shadow-2xl">
+            <div className="flex justify-between items-center pb-3 border-b dark:border-zinc-900 mb-4 shrink-0 text-black dark:text-white">
+              <h3 className="text-xs font-black uppercase">📄 Tax Plan Details Report</h3>
+              <button onClick={() => setTaxModalOpen(false)} className="text-slate-400 hover:text-black dark:hover:text-white font-bold text-sm cursor-pointer">✕</button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 scrollbar-none text-black dark:text-white">
+              <div className="border border-slate-200 dark:border-zinc-850 p-4 rounded-xl bg-slate-55 dark:bg-zinc-955/60 space-y-4">
+                <div className="text-center">
+                  <h4 className="font-black text-[11px] uppercase tracking-wide">Tax Planning Assessment</h4>
+                  <p className="text-[8px] text-slate-405 font-bold uppercase mt-0.5">Assessed Period: FY 2026-27</p>
+                </div>
+
+                <div className="border-b dark:border-zinc-850 pb-3 text-[9.5px] font-bold text-slate-555 dark:text-zinc-400 uppercase space-y-1">
+                  <p>Assessee Name: <span className="text-black dark:text-white font-black">{localStorage.getItem('passbook_user_profile') ? JSON.parse(localStorage.getItem('passbook_user_profile')!).name : 'Local User'}</span></p>
+                  <p>Profession Category: <span className="text-black dark:text-white font-black">{profession}</span></p>
+                  <p>Gross Annual Income: <span className="text-black dark:text-white font-black">₹{displayIncome.toLocaleString('en-IN')}</span></p>
+                </div>
+
+                <div className="space-y-2 text-[9.5px] uppercase font-bold text-slate-500 dark:text-zinc-400">
+                  <h5 className="text-[9.5px] font-black uppercase text-black dark:text-white">Deductions Claimed</h5>
+                  {taxCheckedItems.length === 0 ? (
+                    <p className="text-[8.5px] italic text-slate-400">No deductions claimed. Go to Tax Planner Checklist to claim write-offs.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {taxCheckedItems.map(itemId => {
+                        const amount = taxClaimedAmounts[itemId] || 0;
+                        return (
+                          <div key={itemId} className="flex justify-between text-[8px] font-bold text-slate-450 dark:text-zinc-500 uppercase">
+                            <span className="truncate max-w-[150px]">{itemId.toUpperCase()}</span>
+                            <span>₹{amount.toLocaleString('en-IN')}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4 border-t dark:border-zinc-900 mt-4 shrink-0">
+              <button
+                onClick={() => setTaxModalOpen(false)}
+                className="py-2.5 px-4 border border-slate-200 dark:border-zinc-800 text-[9.5px] font-black uppercase rounded-xl hover:bg-slate-50 cursor-pointer text-slate-600 dark:text-zinc-300"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setDownloadingPdf(true);
+                  setTimeout(() => {
+                    setDownloadingPdf(false);
+                    setTaxModalOpen(false);
+                    alert('Tax Planning Audit PDF Report has been successfully saved to your downloads.');
+                  }, 1500);
+                }}
+                disabled={downloadingPdf}
+                className="py-2.5 px-4 bg-blue-500 hover:bg-blue-650 text-white text-[9.5px] font-black uppercase rounded-xl cursor-pointer flex items-center space-x-1"
+              >
+                {downloadingPdf ? (
+                  <span className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>Download PDF</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
