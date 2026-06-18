@@ -174,13 +174,16 @@ export class TransactionController {
       });
 
       // Legacy fallback: Inject category field as string so frontend requires zero breakages
-      const mapped = transactions.map(t => ({
-        ...t,
-        category: t.category.name,
-        categoryDetails: t.category,
-        date: t.transactionDate, // Legacy dates alias
-        notes: t.note // Legacy notes alias
-      }));
+      const mapped = transactions.map(t => {
+        const plain = JSON.parse(JSON.stringify(t));
+        return {
+          ...plain,
+          category: t.category.name,
+          categoryDetails: t.category,
+          date: t.transactionDate, // Legacy dates alias
+          notes: t.note // Legacy notes alias
+        };
+      });
 
       return res.json(mapped);
     } catch (error: any) {
@@ -278,8 +281,9 @@ export class TransactionController {
         }
       }
 
+      const plainTxn = JSON.parse(JSON.stringify(transaction));
       return res.status(201).json({
-        ...transaction,
+        ...plainTxn,
         category: transaction.category.name,
         date: transaction.transactionDate,
         notes: transaction.note
@@ -405,8 +409,9 @@ export class TransactionController {
         }
       });
 
+      const plainUpdated = JSON.parse(JSON.stringify(updated));
       return res.json({
-        ...updated,
+        ...plainUpdated,
         category: updated.category.name,
         date: updated.transactionDate,
         notes: updated.note
