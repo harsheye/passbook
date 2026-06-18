@@ -7,10 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StatusBar,
   SafeAreaView,
-  Platform
+  Platform,
+  ScrollView,
+  Alert
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -20,9 +21,63 @@ import {
   SearchIcon,
   PlusIcon,
   ChevronDownIcon,
-  CheckIcon
+  CheckIcon,
+  CalendarIcon
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const CATEGORY_ICONS: Record<string, string> = {
+  'Salary': '💼',
+  'Eating Out/Ordering In': '🍔',
+  'Eating Out': '🍔',
+  'Shopping': '🛍️',
+  'Rent': '🏠',
+  'Travel': '🚗',
+  'Groceries': '🛒',
+  'Subscriptions': '📺',
+  'Investment': '📈',
+  'Utilities/Bills': '⚡',
+  'Utilities': '⚡',
+  'Freelancing': '💻',
+  'Dining': '🍔',
+  'Transit': '🚇',
+  'Entertainment': '🎬',
+  'Healthcare': '🏥',
+  'Agriculture Income': '🌾',
+  'Seeds/Fertilizers': '🌱',
+  'Equipment': '🚜',
+  'Labor/Wages': '👥',
+  'Mandi/Transport': '🚚',
+  'Subsidies': '💸',
+  'Personal': '👤',
+  'Sales Revenue': '📈',
+  'Inventory Cost': '📦',
+  'Office Rent': '🏢',
+  'Wages/Salaries': '👥',
+  'Marketing': '📣',
+  'Tax/GST': '🧾',
+  'Office Supplies': '📁',
+  'Pocket Money': '🪙',
+  'Tuition Fees': '🎓',
+  'Books/Stationery': '📚',
+  'Dining Out': '🍔',
+  'Gadgets': '💻',
+  'Household Budget': '👛',
+  'Kids Education': '🎒',
+  'Gold/Jewelry': '👑',
+  'Emergency Savings': '🏦',
+  'Client Payments': '💳',
+  'Software/Tools': '🛠️',
+  'Co-working Rent': '🏢',
+  'Internet/Phone': '🌐',
+  'Professional Fees': '👨‍💼',
+  'GST/Tax': '🧾'
+};
 
 export const TransactionsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -36,6 +91,64 @@ export const TransactionsScreen: React.FC = () => {
   
   // Dropdown state
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+
+  // Month / Year selection
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  
+  // View mode
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+
+  // Reset selected day on month change
+  useEffect(() => {
+    setSelectedDay(null);
+  }, [selectedMonth, selectedYear]);
+
+  const getThreeMonths = () => {
+    const prevDate = new Date(selectedYear, selectedMonth - 1, 1);
+    const currDate = new Date(selectedYear, selectedMonth, 1);
+    const nextDate = new Date(selectedYear, selectedMonth + 1, 1);
+    
+    return [
+      { name: MONTH_NAMES[prevDate.getMonth()], month: prevDate.getMonth(), year: prevDate.getFullYear(), isSelected: false },
+      { name: MONTH_NAMES[currDate.getMonth()], month: currDate.getMonth(), year: currDate.getFullYear(), isSelected: true },
+      { name: MONTH_NAMES[nextDate.getMonth()], month: nextDate.getMonth(), year: nextDate.getFullYear(), isSelected: false }
+    ];
+  };
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  const handleTouchStart = (e: any) => {
+    touchStartX = e.nativeEvent.pageX;
+    touchStartY = e.nativeEvent.pageY;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    const touchEndX = e.nativeEvent.pageX;
+    const touchEndY = e.nativeEvent.pageY;
+    const dx = touchEndX - touchStartX;
+    const dy = touchEndY - touchStartY;
+
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx > 0) {
+        // Swipe Right -> Go to Previous Month
+        const prevDate = new Date(selectedYear, selectedMonth - 1, 1);
+        if (prevDate.getFullYear() < 2026) {
+          Alert.alert('Boundary Reached', 'Cannot navigate before January 2026.');
+          return;
+        }
+        setSelectedMonth(prevDate.getMonth());
+        setSelectedYear(prevDate.getFullYear());
+      } else {
+        // Swipe Left -> Go to Next Month
+        const nextDate = new Date(selectedYear, selectedMonth + 1, 1);
+        setSelectedMonth(nextDate.getMonth());
+        setSelectedYear(nextDate.getFullYear());
+      }
+    }
+  };
 
   const loadData = async () => {
     if (transactions.length === 0) {
@@ -63,56 +176,27 @@ export const TransactionsScreen: React.FC = () => {
     }, [])
   );
 
-  const handleDelete = async (id: string) => {
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to permanently delete this statement?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.delete(`/api/transactions/${id}`);
-              Alert.alert('Deleted', 'Transaction deleted successfully.');
-              loadData();
-            } catch (err) {
-              Alert.alert('Error', 'Failed to delete transaction.');
-            }
-          }
-        }
-      ]
-    );
-  };
-
   const handleTilePress = (txn: Transaction) => {
-    Alert.alert(
-      'Transaction Actions',
-      `Manage "${txn.description || 'Transaction'}"`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Edit Details',
-          onPress: () => {
-            navigation.navigate('AddTransaction', { transaction: txn });
-          }
-        },
-        {
-          text: 'Delete Entry',
-          style: 'destructive',
-          onPress: () => handleDelete(txn.id)
-        }
-      ]
-    );
+    // Navigate directly to AddTransaction (edit mode)
+    navigation.navigate('AddTransaction', { transaction: txn });
   };
 
-  const getGroupedData = () => {
+  const getFilteredTransactions = () => {
+    return transactions.filter(t => {
+      const txDate = t.transactionDate || (t as any).date;
+      if (!txDate) return false;
+      const d = new Date(txDate);
+      return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+    });
+  };
+
+  const getGroupedData = (txns: Transaction[]) => {
     const grouped: { [key: string]: Transaction[] } = {};
-    transactions.forEach(t => {
+    txns.forEach(t => {
       let dateStr = 'no-date';
-      if (t.transactionDate) {
-        dateStr = t.transactionDate.split('T')[0];
+      const txDate = t.transactionDate || (t as any).date;
+      if (txDate) {
+        dateStr = txDate.split('T')[0];
       }
       if (!grouped[dateStr]) grouped[dateStr] = [];
       grouped[dateStr].push(t);
@@ -154,6 +238,248 @@ export const TransactionsScreen: React.FC = () => {
     }
   };
 
+  // Calendar parameters
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOffset = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const daysInMonth = getDaysInMonth(selectedMonth, selectedYear);
+  const firstDayOffset = getFirstDayOffset(selectedMonth, selectedYear);
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDayOffset; i++) {
+    cells.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    cells.push(i);
+  }
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
+  // Group cells into weeks
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    rows.push(cells.slice(i, i + 7));
+  }
+
+  const getDayDetails = (dayNum: number) => {
+    const dayDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const dayTxns = transactions.filter(t => {
+      const txDate = t.transactionDate || (t as any).date;
+      if (!txDate) return false;
+      return txDate.startsWith(dayDateStr);
+    });
+    const net = dayTxns.reduce((sum, t) => sum + t.amount, 0);
+    return {
+      net,
+      txns: dayTxns
+    };
+  };
+
+  const formatCompactAmount = (amt: number) => {
+    if (amt === 0) return '';
+    const absAmt = Math.abs(amt);
+    let str = '';
+    if (absAmt >= 1000) {
+      str = (absAmt / 1000).toFixed(0) + 'k';
+    } else {
+      str = absAmt.toFixed(0);
+    }
+    return (amt < 0 ? '-' : '+') + '₹' + str;
+  };
+
+  const filtered = getFilteredTransactions();
+
+  const totalIncome = filtered
+    .filter(t => (t.transactionType || '').toUpperCase() === 'INCOME')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalExpense = filtered
+    .filter(t => (t.transactionType || '').toUpperCase() === 'EXPENSE' || (t.transactionType || '').toUpperCase() === 'GAMBLING')
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
+  const netMonth = totalIncome - totalExpense;
+
+  const displayTxns = selectedDay !== null
+    ? filtered.filter(t => {
+        const dayDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
+        const txDate = t.transactionDate || (t as any).date;
+        return txDate && txDate.startsWith(dayDateStr);
+      })
+    : filtered;
+
+  // Render Item for transaction FlatList
+  const renderTxnItem = ({ item }: { item: any }) => {
+    if (item.type === 'header') {
+      return (
+        <View style={styles.dateHeader}>
+          <Text style={styles.dateHeaderText}>{formatDateHeader(item.date)}</Text>
+          <View style={[styles.dateHeaderLine, { backgroundColor: colors.border }]} />
+        </View>
+      );
+    }
+
+    const txn = item.data;
+    const isExpense = txn.amount < 0;
+    const tType = (txn.transactionType || 'Expense').toUpperCase();
+    
+    let tileBg = colors.card;
+    let tileBorder = colors.border;
+    let amtColor = '#ef4444';
+
+    if (tType === 'INCOME') {
+      tileBg = isDark ? 'rgba(16,185,129,0.03)' : 'rgba(16,185,129,0.07)';
+      tileBorder = 'rgba(16,185,129,0.15)';
+      amtColor = '#10b981';
+    } else if (tType === 'TRANSFER') {
+      tileBg = colors.card;
+      tileBorder = colors.border;
+      amtColor = colors.text;
+    } else {
+      tileBg = isDark ? 'rgba(239,68,68,0.03)' : 'rgba(239,68,68,0.07)';
+      tileBorder = 'rgba(239,68,68,0.15)';
+    }
+
+    const catName = typeof txn.category === 'object' ? txn.category.name : txn.category;
+    const emoji = CATEGORY_ICONS[catName || ''] || '💰';
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => handleTilePress(txn)}
+        style={[styles.tile, { backgroundColor: tileBg, borderColor: tileBorder, flexDirection: 'row', alignItems: 'center' }]}
+      >
+        <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+          <Text style={{ fontSize: 14 }}>{emoji}</Text>
+        </View>
+        <View style={[styles.tileLeft, { flex: 1 }]}>
+          <View style={styles.tileMeta}>
+            <Text style={[styles.tileTime, { color: colors.subText }]}>{formatTimeStr(txn.transactionDate || (txn as any).date)}</Text>
+            <View style={[styles.tagBadge, { backgroundColor: colors.inputBackground }]}>
+              <Text style={[styles.tagText, { color: colors.subText }]}>{catName || 'Miscellaneous'}</Text>
+            </View>
+            {txn.merchantName ? (
+              <Text style={styles.merchantText}>@{txn.merchantName}</Text>
+            ) : null}
+          </View>
+          <Text style={[styles.tileTitle, { color: colors.text }]}>{txn.description}</Text>
+        </View>
+
+        <Text style={[styles.tileAmt, { color: amtColor }]}>
+          {isExpense ? '-' : '+'}₹{Math.abs(txn.amount).toLocaleString('en-IN')}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderCalendarHeader = () => {
+    return (
+      <View style={{ marginBottom: 16 }}>
+        {/* MONTHLY SUMMARY CARD */}
+        <View style={[styles.calendarSummaryRow, { borderBottomColor: colors.border }]}>
+          <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.summaryTitle, { color: colors.subText }]}>INFLOWS</Text>
+            <Text style={[styles.summaryVal, styles.incomeColor]}>₹{totalIncome.toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.summaryTitle, { color: colors.subText }]}>OUTFLOWS</Text>
+            <Text style={[styles.summaryVal, styles.expenseColor]}>₹{totalExpense.toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={[styles.summaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.summaryTitle, { color: colors.subText }]}>NET SAVINGS</Text>
+            <Text style={[styles.summaryVal, { color: netMonth >= 0 ? '#10b981' : '#ef4444' }]}>
+              {netMonth >= 0 ? '+' : ''}₹{netMonth.toLocaleString('en-IN')}
+            </Text>
+          </View>
+        </View>
+
+        {/* WEEKDAYS HEADER */}
+        <View style={styles.weekHeader}>
+          {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
+            <Text key={day} style={[styles.weekText, { color: colors.subText }]}>{day}</Text>
+          ))}
+        </View>
+
+        {/* CALENDAR GRID */}
+        <View style={[styles.calendarGrid, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {rows.map((row, rIdx) => (
+            <View key={rIdx} style={styles.gridRow}>
+              {row.map((dayNum, cIdx) => {
+                if (dayNum === null) {
+                  return <View key={cIdx} style={styles.cellEmpty} />;
+                }
+
+                const isToday =
+                  new Date().getDate() === dayNum &&
+                  new Date().getMonth() === selectedMonth &&
+                  new Date().getFullYear() === selectedYear;
+
+                const isSelected = selectedDay === dayNum;
+                const { net } = getDayDetails(dayNum);
+
+                let amtColor = '#71717a';
+                if (net > 0) amtColor = '#10b981';
+                else if (net < 0) amtColor = '#ef4444';
+
+                return (
+                  <TouchableOpacity
+                    key={cIdx}
+                    onPress={() => setSelectedDay(dayNum)}
+                    style={[
+                      styles.cellTouch,
+                      {
+                        backgroundColor: isSelected ? '#6366f1' : isToday ? colors.inputBackground : 'transparent',
+                        borderColor: isToday ? '#6366f1' : 'transparent',
+                        borderWidth: isToday ? 1 : 0
+                      }
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.cellDayText,
+                        { color: isSelected ? '#ffffff' : colors.text }
+                      ]}
+                    >
+                      {dayNum}
+                    </Text>
+                    {net !== 0 && (
+                      <Text
+                        style={[
+                          styles.cellAmtText,
+                          { color: isSelected ? '#ffffff' : amtColor }
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatCompactAmount(net)}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+
+        {/* SELECTED DAY DETAIL HEADER */}
+        {selectedDay !== null && (
+          <View style={styles.selectedDayHeader}>
+            <Text style={[styles.selectedDayTitle, { color: colors.text }]}>
+              Statements for {MONTH_NAMES[selectedMonth]} {selectedDay}
+            </Text>
+            <TouchableOpacity onPress={() => setSelectedDay(null)} style={styles.clearSelectBtn}>
+              <Text style={{ color: '#6366f1', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' }}>Show All Month</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
@@ -162,145 +488,109 @@ export const TransactionsScreen: React.FC = () => {
         {/* TOP BAR BRANDING HEADER */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View>
-            <Text style={[styles.brandSub, { color: colors.subText }]}>Chronological statement log</Text>
             <Text style={[styles.brandTitle, { color: colors.text }]}>TRANSACTIONS</Text>
           </View>
 
-          <TouchableOpacity
-            onPress={() => navigation.navigate('AddTransaction')}
-            style={[styles.headerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            <PlusIcon color={colors.text} size={16} />
-          </TouchableOpacity>
-        </View>
-
-        {/* SEARCH BAR ROW WITH INTEGRATED FILTER DROPDOWN */}
-        <View style={styles.searchRow}>
-          <View style={[styles.searchInputContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SearchIcon color={colors.subText} size={14} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search statements..."
-              placeholderTextColor={colors.subText}
-              value={search}
-              onChangeText={setSearch}
-            />
-            
-            {/* INLINE TYPE SELECTOR DROPDOWN */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
-              onPress={() => setTypeDropdownOpen(!typeDropdownOpen)}
-              style={[styles.filterBtn, { backgroundColor: colors.inputBackground }]}
+              onPress={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}
+              style={[
+                styles.headerBtn,
+                {
+                  backgroundColor: viewMode === 'calendar' ? '#6366f1' : colors.card,
+                  borderColor: viewMode === 'calendar' ? '#6366f1' : colors.border
+                }
+              ]}
             >
-              <Text style={[styles.filterBtnText, { color: colors.text }]}>
-                {type === '' ? 'All' : type === 'Expense' ? 'Exp' : type === 'Income' ? 'Inc' : 'Txf'}
-              </Text>
-              <ChevronDownIcon color={colors.subText} size={10} />
+              <CalendarIcon color={viewMode === 'calendar' ? '#ffffff' : colors.text} size={16} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* DROPDOWN SELECT DIALOG */}
-        {typeDropdownOpen && (
-          <View style={[styles.dropdownMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {[
-              { label: 'All Transactions', value: '' },
-              { label: 'Expenses Only', value: 'Expense' },
-              { label: 'Incomes Only', value: 'Income' },
-              { label: 'Transfers Only', value: 'Transfer' }
-            ].map(opt => (
+        {/* 3-MONTH COLUMN SELECTOR */}
+        <View style={[styles.monthSelectorContainer, { borderBottomColor: colors.border }]}>
+          <View style={styles.threeMonthRow}>
+            {getThreeMonths().map((m, idx) => (
               <TouchableOpacity
-                key={opt.value}
+                key={idx}
                 onPress={() => {
-                  setType(opt.value);
-                  setTypeDropdownOpen(false);
+                  if (m.year < 2026) {
+                    Alert.alert('Boundary Reached', 'Cannot navigate before January 2026.');
+                    return;
+                  }
+                  setSelectedMonth(m.month);
+                  setSelectedYear(m.year);
                 }}
-                style={styles.dropdownItem}
+                style={[
+                  styles.threeMonthItem,
+                  m.isSelected && { borderBottomColor: '#6366f1', borderBottomWidth: 2 }
+                ]}
               >
-                <Text style={[styles.dropdownText, { color: colors.subText }, type === opt.value && { color: colors.text }]}>
-                  {opt.label}
+                <Text
+                  style={[
+                    styles.threeMonthText,
+                    { color: colors.text },
+                    m.isSelected ? styles.monthTextSelected : styles.monthTextUnselected
+                  ]}
+                >
+                  {m.name}
                 </Text>
-                {type === opt.value && <CheckIcon color="#10b981" size={12} />}
               </TouchableOpacity>
             ))}
           </View>
-        )}
+        </View>
 
-        {/* LEDGER TIMELINE LIST */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#2fb09b" />
-            <Text style={[styles.loadingText, { color: colors.subText }]}>Fetching statement ledger...</Text>
-          </View>
-        ) : transactions.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.subText }]}>No transaction history matched.</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={getGroupedData()}
-            keyExtractor={(item, index) => index.toString()}
-            contentContainerStyle={styles.listContainer}
-            renderItem={({ item }) => {
-              if (item.type === 'header') {
-                return (
-                  <View style={styles.dateHeader}>
-                    <Text style={styles.dateHeaderText}>{formatDateHeader(item.date)}</Text>
-                    <View style={[styles.dateHeaderLine, { backgroundColor: colors.border }]} />
-                  </View>
-                );
-              }
-
-              const txn = item.data;
-              const isExpense = txn.amount < 0;
-              const tType = (txn.transactionType || 'Expense').toUpperCase();
-              
-              // Colors configuration matching desk theme
-              let tileBg = colors.card;
-              let tileBorder = colors.border;
-              let amtColor = '#ef4444';
-
-              if (tType === 'INCOME') {
-                tileBg = isDark ? 'rgba(16,185,129,0.03)' : 'rgba(16,185,129,0.07)';
-                tileBorder = 'rgba(16,185,129,0.15)';
-                amtColor = '#10b981';
-              } else if (tType === 'TRANSFER') {
-                tileBg = colors.card;
-                tileBorder = colors.border;
-                amtColor = colors.text;
-              } else {
-                tileBg = isDark ? 'rgba(239,68,68,0.03)' : 'rgba(239,68,68,0.07)';
-                tileBorder = 'rgba(239,68,68,0.15)';
-              }
-
-              const catName = typeof txn.category === 'object' ? txn.category.name : txn.category;
-
-              return (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => handleTilePress(txn)}
-                  style={[styles.tile, { backgroundColor: tileBg, borderColor: tileBorder }]}
-                >
-                  <View style={styles.tileLeft}>
-                    <View style={styles.tileMeta}>
-                      <Text style={[styles.tileTime, { color: colors.subText }]}>{formatTimeStr(txn.transactionDate)}</Text>
-                      <View style={[styles.tagBadge, { backgroundColor: colors.inputBackground }]}>
-                        <Text style={[styles.tagText, { color: colors.subText }]}>{catName || 'Miscellaneous'}</Text>
-                      </View>
-                      {txn.merchantName ? (
-                        <Text style={styles.merchantText}>@{txn.merchantName}</Text>
-                      ) : null}
-                    </View>
-                    <Text style={[styles.tileTitle, { color: colors.text }]}>{txn.description}</Text>
-                  </View>
-
-                  <Text style={[styles.tileAmt, { color: amtColor }]}>
-                    {isExpense ? '-' : '+'}₹{Math.abs(txn.amount).toLocaleString('en-IN')}
+        {/* CONTENT WITH SWIPE GESTURE WRAPPER */}
+        <View 
+          onTouchStart={handleTouchStart} 
+          onTouchEnd={handleTouchEnd} 
+          style={{ flex: 1 }}
+        >
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#2fb09b" />
+              <Text style={[styles.loadingText, { color: colors.subText }]}>Fetching statement ledger...</Text>
+            </View>
+          ) : viewMode === 'list' ? (
+            <FlatList
+              data={getGroupedData(filtered)}
+              keyExtractor={(item, index) => index.toString()}
+              contentContainerStyle={styles.listContainer}
+              renderItem={renderTxnItem}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <Text style={{ fontSize: 42, marginBottom: 12 }}>🔭🐷</Text>
+                  <Text style={[styles.emptyText, { color: colors.subText }]}>
+                    No statements logged for {MONTH_NAMES[selectedMonth]}
                   </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
-        )}
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('AddTransaction')}
+                    style={[styles.addBtnEmpty, { backgroundColor: '#6366f1', borderColor: colors.border }]}
+                  >
+                    <Text style={styles.addBtnEmptyText}>+ Log Statement</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+          ) : (
+            <FlatList
+              data={getGroupedData(displayTxns)}
+              keyExtractor={(item, index) => index.toString()}
+              ListHeaderComponent={renderCalendarHeader}
+              contentContainerStyle={styles.listContainer}
+              renderItem={renderTxnItem}
+              ListEmptyComponent={() => (
+                <View style={styles.emptyContainer}>
+                  <Text style={[styles.emptyText, { color: colors.subText }]}>
+                    {selectedDay !== null
+                      ? `No statements logged for ${MONTH_NAMES[selectedMonth]} ${selectedDay}`
+                      : `No statements logged for ${MONTH_NAMES[selectedMonth]}`}
+                  </Text>
+                </View>
+              )}
+            />
+          )}
+        </View>
 
         {/* BOTTOM TAB BAR */}
         <BottomTabBar activeTab="Transactions" />
@@ -322,13 +612,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
   },
   brandSub: {
     fontSize: 8,
-    color: '#71717a',
     fontWeight: '900',
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -336,7 +625,6 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#ffffff',
     letterSpacing: 0.5,
   },
   headerBtn: {
@@ -344,24 +632,19 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#27272a',
-    backgroundColor: '#18181b',
     alignItems: 'center',
     justifyContent: 'center',
   },
   searchRow: {
-    marginTop: 16,
+    marginTop: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
-    marginBottom: 10,
   },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#18181b',
     borderWidth: 1,
-    borderColor: '#27272a',
     borderRadius: 12,
     paddingLeft: 12,
     paddingRight: 6,
@@ -369,7 +652,6 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    color: '#ffffff',
     fontSize: 11,
     fontWeight: '600',
     paddingHorizontal: 8,
@@ -378,7 +660,6 @@ const styles = StyleSheet.create({
   filterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#27272a',
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -387,7 +668,6 @@ const styles = StyleSheet.create({
   filterBtnText: {
     fontSize: 8,
     fontWeight: '900',
-    color: '#e2e8f0',
     marginRight: 4,
     textTransform: 'uppercase',
   },
@@ -395,9 +675,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 114,
     right: 22,
-    backgroundColor: '#18181b',
     borderWidth: 1,
-    borderColor: '#27272a',
     borderRadius: 12,
     paddingVertical: 4,
     width: 130,
@@ -416,16 +694,44 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   dropdownText: {
-    color: '#94a3b8',
     fontSize: 10,
     fontWeight: '700',
   },
-  dropdownTextActive: {
-    color: '#ffffff',
+  monthSelectorContainer: {
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  threeMonthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  threeMonthItem: {
+    paddingVertical: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  threeMonthText: {
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  monthTextSelected: {
+    fontWeight: '900',
+    opacity: 1,
+  },
+  monthTextUnselected: {
+    fontWeight: '600',
+    opacity: 0.4,
   },
   listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
   dateHeader: {
     flexDirection: 'row',
@@ -436,7 +742,7 @@ const styles = StyleSheet.create({
   dateHeaderText: {
     fontSize: 8.5,
     fontWeight: '900',
-    color: '#2fb09b',
+    color: '#6366f1',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginRight: 8,
@@ -444,7 +750,6 @@ const styles = StyleSheet.create({
   dateHeaderLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#27272a',
   },
   tile: {
     flexDirection: 'row',
@@ -467,11 +772,9 @@ const styles = StyleSheet.create({
   tileTime: {
     fontSize: 8.5,
     fontWeight: '800',
-    color: '#71717a',
     marginRight: 6,
   },
   tagBadge: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -480,7 +783,6 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 7.5,
     fontWeight: '800',
-    color: '#a1a1aa',
     textTransform: 'uppercase',
   },
   merchantText: {
@@ -492,7 +794,6 @@ const styles = StyleSheet.create({
   tileTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#f4f4f5',
     marginTop: 4,
   },
   tileAmt: {
@@ -507,7 +808,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 10,
-    color: '#71717a',
     fontWeight: '700',
     marginTop: 8,
     textTransform: 'uppercase',
@@ -516,12 +816,118 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 60,
+    marginTop: 40,
+    paddingVertical: 20,
   },
   emptyText: {
     fontSize: 10,
-    color: '#71717a',
     fontWeight: '700',
     textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  addBtnEmpty: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  addBtnEmptyText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  calendarSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    marginBottom: 12,
+  },
+  summaryCard: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  summaryTitle: {
+    fontSize: 7.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  summaryVal: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  weekHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  weekText: {
+    fontSize: 8,
+    fontWeight: '900',
+    width: '13.5%',
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 6,
+    gap: 4,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  cellEmpty: {
+    width: '13.5%',
+    aspectRatio: 1,
+  },
+  cellTouch: {
+    width: '13.5%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  cellDayText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  cellAmtText: {
+    fontSize: 6.5,
+    fontWeight: '900',
+    marginTop: 1,
+  },
+  incomeColor: {
+    color: '#10b981',
+  },
+  expenseColor: {
+    color: '#f43f5e',
+  },
+  selectedDayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  selectedDayTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
+  clearSelectBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
 });
+

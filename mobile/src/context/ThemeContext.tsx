@@ -15,29 +15,29 @@ export interface ThemeColors {
 }
 
 export const darkColors: ThemeColors = {
-  background: '#09090b',
-  card: '#18181b',
-  border: '#27272a',
+  background: '#070514', // Deep space cosmic indigo
+  card: '#0f0d2c',       // Rich indigo-purple container
+  border: '#201c56',     // Vibrant indigo border
   text: '#ffffff',
-  subText: '#a1a1aa',
-  tabBar: '#09090b',
-  tabActive: '#ffffff',
-  tabInactive: '#71717a',
-  inputBackground: '#09090b',
-  divider: '#27272a',
+  subText: '#9a95e2',    // Soft lavender subtext
+  tabBar: '#0d0a27',     // Midnight indigo tab bar
+  tabActive: '#818cf8',  // Bright indigo active icon
+  tabInactive: '#4e4a7d',// Muted purple-grey inactive
+  inputBackground: '#05030f', // Rich deep dark input fields
+  divider: '#201c56',
 };
 
 export const lightColors: ThemeColors = {
-  background: '#f8fafc',
-  card: '#ffffff',
-  border: '#e2e8f0',
-  text: '#0f172a',
-  subText: '#475569',
+  background: '#f3f4ff', // Soft lavender-blue tint background
+  card: '#ffffff',       // Pure white cards
+  border: '#d2d6f7',     // Soft lavender-purple border
+  text: '#0f172a',       // Slate dark text
+  subText: '#5e6194',    // Lavender slate subtext
   tabBar: '#ffffff',
-  tabActive: '#4f46e5', // indigo-600
-  tabInactive: '#94a3b8',
-  inputBackground: '#f1f5f9',
-  divider: '#e2e8f0',
+  tabActive: '#6366f1',  // Vibrant indigo active icon
+  tabInactive: '#9ca0d2',// Soft gray-purple inactive icon
+  inputBackground: '#eaecff', // Soft tinted lavender inputs
+  divider: '#e0e3ff',
 };
 
 interface ThemeContextType {

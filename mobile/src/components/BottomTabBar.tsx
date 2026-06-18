@@ -20,7 +20,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
   };
 
   return (
-    <View style={[styles.bottomTabBar, { backgroundColor: colors.tabBar, borderTopColor: colors.border }]}>
+    <View style={[styles.bottomTabBar, { backgroundColor: colors.tabBar }]}>
       {/* Home Tab */}
       <TouchableOpacity
         onPress={() => setActiveTab('Home')}
@@ -45,7 +45,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
           onPress={() => setActiveTab('Chat')}
           style={[
             styles.centerTabBtn,
-            { borderColor: colors.border },
+            { backgroundColor: isDark ? '#161435' : '#eaecff' },
             activeTab === 'Chat' && { backgroundColor: '#10b981' }
           ]}
         >
@@ -76,12 +76,24 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
 
 const styles = StyleSheet.create({
   bottomTabBar: {
-    height: 56,
-    borderTopWidth: 1,
+    position: 'absolute',
+    bottom: 40,
+    left: 20,
+    right: 20,
+    height: 60,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 10,
+    // Explicitly remove shadows and borders for clean flat look
+    borderWidth: 0,
+    borderColor: 'transparent',
+    elevation: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 0,
   },
   tabBtn: {
     alignItems: 'center',
@@ -106,14 +118,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#000000',
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
 });

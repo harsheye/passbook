@@ -15,7 +15,8 @@ import {
   Modal,
   FlatList,
   Image,
-  BackHandler
+  BackHandler,
+  Keyboard
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
@@ -24,6 +25,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { api, getBaseUrl } from '../api/api';
 import { BottomTabBar } from '../components/BottomTabBar';
 import { useTheme } from '../context/ThemeContext';
+import { useTab } from '../context/TabContext';
+import * as ImagePicker from 'expo-image-picker';
 import {
   SparklesIcon,
   SendIcon,
@@ -50,7 +53,7 @@ interface ChatMessage {
     time: string;
     description: string;
     amount: number;
-    category: string;
+    category: any;
     subcategory: string;
     paymentMethod: string;
     account: string;
@@ -114,11 +117,25 @@ const getCategoryEmoji = (category: string, type?: string) => {
 export const ChatScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
+  const { setActiveTab } = useTab();
+  const getFormattedTime = () => {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
+  const parseSafeDate = (dStr: any) => {
+    if (!dStr) return new Date();
+    const parsed = new Date(dStr);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
   // States
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [expandedDetails, setExpandedDetails] = useState<Record<string, boolean>>({});
   const [hubAuthModalVisible, setHubAuthModalVisible] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
@@ -134,11 +151,15 @@ export const ChatScreen: React.FC = () => {
   const [tagInputValue, setTagInputValue] = useState('');
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
+
+  const handleLayout = (event: any) => {};
 
   // Handle Android hardware back button to navigate to Dashboard
   useEffect(() => {
     const backAction = () => {
-      navigation.navigate('Dashboard');
+      setActiveTab('Home');
+      navigation.navigate('MainTab');
       return true; // prevent default behavior
     };
 
@@ -150,18 +171,32 @@ export const ChatScreen: React.FC = () => {
     return () => backHandler.remove();
   }, [navigation]);
 
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+    });
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
   const handleCameraPress = () => {
     Alert.alert(
-      'Mock Scanner Selector',
-      'Choose what to upload and scan:',
+      'Select Image Source',
+      'Choose where to select receipt image:',
       [
         {
-          text: 'Scan Receipt (OCR)',
-          onPress: () => handleMockScan('receipt'),
+          text: 'Camera',
+          onPress: handleTakePhoto,
         },
         {
-          text: 'Mock Photo Scan',
-          onPress: () => handleMockScan('item'),
+          text: 'Photo Gallery',
+          onPress: handleChooseFromGallery,
         },
         {
           text: 'Cancel',
@@ -169,6 +204,58 @@ export const ChatScreen: React.FC = () => {
         },
       ]
     );
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.getCameraPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await ImagePicker.requestCameraPermissionsAsync();
+        if (req.status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera permission is required to take photos.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('Failed to launch camera:', err);
+      Alert.alert('Error', 'An error occurred while opening the camera.');
+    }
+  };
+
+  const handleChooseFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (req.status !== 'granted') {
+          Alert.alert('Permission Denied', 'Gallery permission is required to pick photos.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('Failed to launch gallery:', err);
+      Alert.alert('Error', 'An error occurred while opening the gallery.');
+    }
   };
 
   // Load chat history
@@ -210,111 +297,171 @@ export const ChatScreen: React.FC = () => {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && !selectedImage) return;
+
+    Keyboard.dismiss();
+    inputRef.current?.blur();
 
     const userMsgId = `user_${Date.now()}`;
-    const userQuery = inputText;
-    
-    const updatedMsgs = [...messages, { id: userMsgId, sender: 'user' as const, text: userQuery }];
+    const userQuery = inputText.trim() || 'Scanned uploaded receipt';
+    const imageToScan = selectedImage;
+
+    const updatedMsgs = [
+      ...messages,
+      {
+        id: userMsgId,
+        sender: 'user' as const,
+        text: userQuery,
+        imageUrl: imageToScan || undefined
+      }
+    ];
+
     setMessages(updatedMsgs);
     saveHistory(updatedMsgs);
     setInputText('');
+    setSelectedImage(null);
     setLoading(true);
     scrollToBottom();
 
-    try {
-      const res = await api.post('/api/transactions/ai', { text: userQuery });
-      const txnsList = res.data.transactions || [res.data.transaction];
-      
-      const currentTime = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-      const queryLower = userQuery.toLowerCase();
+    if (imageToScan) {
+      // Simulate image OCR Scan
+      setTimeout(() => {
+        const currentTime = getFormattedTime();
+        
+        // Generate mock items list based on a standard receipt scan
+        const extractedItems = [
+          { name: 'Office Stationery Pack', price: 1250 },
+          { name: 'Ergonomic Desk Organizer', price: 950 },
+          { name: 'Eco-friendly Coffee Tumbler', price: 800 }
+        ];
+        const sumTotal = extractedItems.reduce((acc, item) => acc + item.price, 0);
 
-      const newMessages: ChatMessage[] = [];
-
-      txnsList.forEach((t: any, index: number) => {
-        let parsedMerchant = t.merchantName || '';
-        let parsedLocation = '';
-        let parsedMood = 'Neutral';
-        let parsedTags = 'food';
-        let parsedNote = t.notes || '';
-
-        // Preset checks
-        if (queryLower.includes('dominos') || queryLower.includes('pizza')) {
-          parsedMerchant = 'Dominos';
-          parsedLocation = 'Karimpur';
-          parsedMood = 'Happy';
-          parsedTags = 'food, pizza';
-          parsedNote = 'Weekend dinner with friends';
-        } else if (queryLower.includes('starbucks') || queryLower.includes('coffee') || queryLower.includes('cafe')) {
-          parsedMerchant = 'Starbucks';
-          parsedLocation = 'Connaught Place';
-          parsedMood = 'Happy';
-          parsedTags = 'food, coffee';
-          parsedNote = 'Morning espresso brew';
-        }
-
-        const locMatch = userQuery.match(/in\s+([A-Za-z]+)/i);
-        if (locMatch && locMatch[1]) parsedLocation = locMatch[1];
-
-        let ptType: 'Expense' | 'Income' | 'Transfer' = 'Expense';
-        const rawType = (t.transactionType || t.type || 'Expense').toLowerCase();
-        if (rawType.includes('income')) {
-          ptType = 'Income';
-        } else if (rawType.includes('transfer')) {
-          ptType = 'Transfer';
-        }
-
-        const customMsg: ChatMessage = {
-          id: `ai_${Date.now()}_${index}`,
+        const aiMsg: ChatMessage = {
+          id: `ai_ocr_${Date.now()}`,
           sender: 'ai',
-          text: txnsList.length > 1
-            ? `I detected Category "${t.category}". Confirm, customize, and save this split ledger entry below:`
-            : 'I have successfully parsed your sentence. Confirm, customize, and save the ledger entry below:',
+          text: 'OCR scan complete! I detected an office supplies purchase. Customize and record the billing details below:',
           customizer: {
-            date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
+            date: new Date().toISOString().split('T')[0],
             time: currentTime,
-            description: t.description || 'AI Transaction',
-            amount: Math.abs(t.amount) || 1250,
-            category: t.category || 'Eating Out/Ordering In',
-            subcategory: t.subcategory || 'General',
-            paymentMethod: t.paymentMethod || 'UPI',
-            account: t.account || 'SBI',
-            type: ptType,
-            merchantName: parsedMerchant,
-            location: parsedLocation,
-            tags: parsedTags,
-            note: parsedNote,
+            description: 'Office supplies purchase',
+            amount: sumTotal,
+            category: 'Shopping',
+            subcategory: 'Stationery',
+            paymentMethod: 'Card',
+            account: 'HDFC',
+            type: 'Expense',
+            merchantName: 'Stationery Mart',
+            location: 'Sector 5',
+            tags: 'office, supplies',
+            note: 'Attached receipt image scan',
             favorite: false,
-            items: t.items || [
-              { name: t.description || 'General Item', price: Math.abs(t.amount) || 1250 }
-            ]
-          }
+            items: extractedItems
+          },
+          imageUrl: imageToScan
         };
 
-        newMessages.push(customMsg);
-      });
-
-      setTimeout(() => {
-        const finalMsgs = [...updatedMsgs, ...newMessages];
+        const finalMsgs = [...updatedMsgs, aiMsg];
         setMessages(finalMsgs);
         saveHistory(finalMsgs);
         setLoading(false);
         scrollToBottom();
-      }, 800);
+      }, 1500);
+    } else {
+      // Normal text classification
+      try {
+        const res = await api.post('/api/transactions/ai', { text: userQuery });
+        const txnsList = res.data.transactions || [res.data.transaction];
+        
+        const currentTime = getFormattedTime();
+        const queryLower = userQuery.toLowerCase();
 
-    } catch (err) {
-      const finalMsgs = [
-        ...updatedMsgs,
-        {
-          id: `ai_err_${Date.now()}`,
-          sender: 'ai' as const,
-          text: 'I was unable to classify that statement automatically. Try another or scan a receipt attachment!'
-        }
-      ];
-      setMessages(finalMsgs);
-      saveHistory(finalMsgs);
-      setLoading(false);
-      scrollToBottom();
+        const newMessages: ChatMessage[] = [];
+
+        txnsList.forEach((t: any, index: number) => {
+          let parsedMerchant = t.merchantName || '';
+          let parsedLocation = '';
+          let parsedMood = 'Neutral';
+          let parsedTags = 'food';
+          let parsedNote = t.notes || '';
+
+          // Preset checks
+          if (queryLower.includes('dominos') || queryLower.includes('pizza')) {
+            parsedMerchant = 'Dominos';
+            parsedLocation = 'Karimpur';
+            parsedMood = 'Happy';
+            parsedTags = 'food, pizza';
+            parsedNote = 'Weekend dinner with friends';
+          } else if (queryLower.includes('starbucks') || queryLower.includes('coffee') || queryLower.includes('cafe')) {
+            parsedMerchant = 'Starbucks';
+            parsedLocation = 'Connaught Place';
+            parsedMood = 'Happy';
+            parsedTags = 'food, coffee';
+            parsedNote = 'Morning espresso brew';
+          }
+
+          const locMatch = userQuery.match(/in\s+([A-Za-z]+)/i);
+          if (locMatch && locMatch[1]) parsedLocation = locMatch[1];
+
+          let ptType: 'Expense' | 'Income' | 'Transfer' = 'Expense';
+          const rawType = (t.transactionType || t.type || 'Expense').toLowerCase();
+          if (rawType.includes('income')) {
+            ptType = 'Income';
+          } else if (rawType.includes('transfer')) {
+            ptType = 'Transfer';
+          }
+
+          const customMsg: ChatMessage = {
+            id: `ai_${Date.now()}_${index}`,
+            sender: 'ai',
+            text: txnsList.length > 1
+              ? `I detected Category "${t.category}". Confirm, customize, and save this split ledger entry below:`
+              : 'I have successfully parsed your sentence. Confirm, customize, and save the ledger entry below:',
+            customizer: {
+              date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
+              time: currentTime,
+              description: t.description || 'AI Transaction',
+              amount: Math.abs(t.amount) || 1250,
+              category: (typeof t.category === 'object' ? t.category.name : t.category) || 'Eating Out/Ordering In',
+              subcategory: t.subcategory || 'General',
+              paymentMethod: t.paymentMethod || 'UPI',
+              account: t.account || 'SBI',
+              type: ptType,
+              merchantName: parsedMerchant,
+              location: parsedLocation,
+              tags: parsedTags,
+              note: parsedNote,
+              favorite: false,
+              items: t.items || [
+                { name: t.description || 'General Item', price: Math.abs(t.amount) || 1250 }
+              ]
+            }
+          };
+
+          newMessages.push(customMsg);
+        });
+
+        setTimeout(() => {
+          const finalMsgs = [...updatedMsgs, ...newMessages];
+          setMessages(finalMsgs);
+          saveHistory(finalMsgs);
+          setLoading(false);
+          scrollToBottom();
+        }, 800);
+
+      } catch (err) {
+        const finalMsgs = [
+          ...updatedMsgs,
+          {
+            id: `ai_err_${Date.now()}`,
+            sender: 'ai' as const,
+            text: 'I was unable to classify that statement automatically. Try another or scan a receipt attachment!'
+          }
+        ];
+        setMessages(finalMsgs);
+        saveHistory(finalMsgs);
+        setLoading(false);
+        scrollToBottom();
+      }
     }
   };
 
@@ -331,7 +478,7 @@ export const ChatScreen: React.FC = () => {
     scrollToBottom();
 
     setTimeout(() => {
-      const currentTime = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const currentTime = getFormattedTime();
       
       let customizerData;
       let text = '';
@@ -510,8 +657,27 @@ export const ChatScreen: React.FC = () => {
       finalCategory = 'Money Transfers';
     }
 
-    const combinedDateStr = new Date(`${c.date}T${c.time || '12:00'}:00`).toISOString();
-    const tagsArr = c.tags.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    let combinedDateStr = new Date().toISOString();
+    try {
+      const parsedDate = new Date(`${c.date}T${c.time || '12:00'}:00`);
+      if (!isNaN(parsedDate.getTime())) {
+        combinedDateStr = parsedDate.toISOString();
+      } else {
+        const parts = (c.date || '').split(/[-/]/);
+        if (parts.length === 3) {
+          if (parts[2].length === 4) {
+            const reordered = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T${c.time || '12:00'}:00`);
+            if (!isNaN(reordered.getTime())) {
+              combinedDateStr = reordered.toISOString();
+            }
+          }
+        }
+      }
+    } catch (dateErr) {
+      console.warn('Date parsing failed, using default:', dateErr);
+    }
+
+    const tagsArr = (c.tags || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     const tagsJson = JSON.stringify(tagsArr);
 
     const apiBase = await getBaseUrl();
@@ -561,9 +727,6 @@ export const ChatScreen: React.FC = () => {
         if (m.id === msgId) {
           return {
             ...m,
-            text: c.isCommitted
-              ? 'Transaction successfully updated in statement ledger!'
-              : 'Transaction successfully committed to statement ledger!',
             customizer: {
               ...c,
               isCommitted: true,
@@ -576,11 +739,10 @@ export const ChatScreen: React.FC = () => {
       });
       setMessages(updated);
       saveHistory(updated);
-      Alert.alert('Success', c.isCommitted ? 'Transaction updated successfully!' : 'Transaction saved to ledger!');
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      Alert.alert('Save Failed', 'Could not record the transaction. Check backend connection.');
+      Alert.alert('Save Failed', `Could not record the transaction. Error: ${err.message || err}`);
     }
   };
 
@@ -645,8 +807,16 @@ export const ChatScreen: React.FC = () => {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+      
+      {/* Background Blobs for vibrant color backdrop */}
+      <View style={[styles.blob1, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.16)' : 'rgba(139, 92, 246, 0.08)' }]} pointerEvents="none" />
+      <View style={[styles.blob2, { backgroundColor: isDark ? 'rgba(6, 182, 212, 0.14)' : 'rgba(6, 182, 212, 0.07)' }]} pointerEvents="none" />
+      <View style={[styles.blob3, { backgroundColor: isDark ? 'rgba(244, 63, 94, 0.14)' : 'rgba(244, 63, 94, 0.07)' }]} pointerEvents="none" />
+      <View style={[styles.blob4, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.06)' }]} pointerEvents="none" />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         style={styles.keyboardContainer}
       >
         {/* HEADER SECTION */}
@@ -655,13 +825,19 @@ export const ChatScreen: React.FC = () => {
             <ArrowLeftIcon color={colors.text} size={16} />
           </TouchableOpacity>
           
-          <View style={[styles.headerBrandGroup, { backgroundColor: isDark ? '#1f4246' : colors.inputBackground }]}>
-            <View style={[styles.pulseIndicator, { backgroundColor: isDark ? '#2fb09b' : '#10b981' }]} />
-            <Text style={[styles.brandText, { color: colors.text }]}>Passbook AI</Text>
-            <ChevronDownIcon color={colors.subText} size={10} />
+          <View style={[styles.headerBrandGroup, { backgroundColor: isDark ? '#1e1b4b' : '#e0e7ff', borderColor: isDark ? '#4338ca' : '#c7d2fe', borderWidth: 1 }]}>
+            <View style={[styles.pulseIndicator, { backgroundColor: '#6366f1' }]} />
+            <Text style={[styles.brandText, { color: isDark ? '#e0e7ff' : '#4338ca' }]}>Passbook AI</Text>
+            <ChevronDownIcon color={isDark ? '#a5b4fc' : '#6366f1'} size={10} />
           </View>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Dashboard')} style={[styles.headerBtn, { backgroundColor: colors.inputBackground }]}>
+          <TouchableOpacity
+            onPress={() => {
+              setActiveTab('Home');
+              navigation.navigate('MainTab');
+            }}
+            style={[styles.headerBtn, { backgroundColor: colors.inputBackground }]}
+          >
             <HomeIcon color={colors.text} size={16} />
           </TouchableOpacity>
         </View>
@@ -690,8 +866,8 @@ export const ChatScreen: React.FC = () => {
                 </Text>
 
                 {isUser ? (
-                  <View style={[styles.bubbleUser, { backgroundColor: isDark ? '#ffffff' : colors.inputBackground }]}>
-                    <Text style={[styles.bubbleUserText, { color: isDark ? '#122325' : colors.text }]}>{m.text}</Text>
+                  <View style={[styles.bubbleUser, { backgroundColor: '#4f46e5', shadowColor: '#4f46e5' }]}>
+                    <Text style={[styles.bubbleUserText, { color: '#ffffff' }]}>{m.text}</Text>
                     {m.imageUrl && (
                       <View style={[styles.bubbleImageContainer, { borderColor: colors.border, backgroundColor: colors.card }]}>
                         <View style={[styles.attachmentHeader, { borderBottomColor: colors.border }]}>
@@ -703,8 +879,15 @@ export const ChatScreen: React.FC = () => {
                   </View>
                 ) : (
                   <View style={styles.aiMessageWrapper}>
-                    <View style={[styles.bubbleAI, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <Text style={[styles.bubbleAIText, { color: colors.text }]}>{m.text}</Text>
+                    <View style={[
+                      styles.bubbleAI,
+                      {
+                        backgroundColor: isDark ? 'rgba(24, 50, 53, 0.95)' : 'rgba(240, 253, 244, 0.95)',
+                        borderColor: isDark ? '#10b981' : '#bbf7d0',
+                        shadowColor: isDark ? '#10b981' : '#cbd5e1',
+                      }
+                    ]}>
+                      <Text style={[styles.bubbleAIText, { color: isDark ? '#cbd5e1' : '#0f172a' }]}>{m.text}</Text>
                       {m.imageUrl && (
                         <View style={[styles.bubbleImageContainer, { borderColor: colors.border, backgroundColor: colors.background }]}>
                           <View style={[styles.attachmentHeader, { borderBottomColor: colors.border }]}>
@@ -721,19 +904,24 @@ export const ChatScreen: React.FC = () => {
                         /* Minimized committed ledger entry view */
                         <TouchableOpacity
                           activeOpacity={0.8}
-                          onPress={() => handleUpdateField(m.id, 'isMinimized', false)}
+                          onPress={() => {
+                            handleUpdateField(m.id, 'isMinimized', false);
+                            scrollToBottom();
+                          }}
                           style={[
                             styles.minimizedCard,
                             {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
                               borderLeftColor: m.customizer.type === 'Income'
                                 ? '#2fb09b'
                                 : m.customizer.type === 'Transfer'
-                                ? '#4b5563'
+                                ? '#71717a'
                                 : '#ef4444',
                               borderBottomColor: m.customizer.type === 'Income'
                                 ? '#2fb09b'
                                 : m.customizer.type === 'Transfer'
-                                ? '#4b5563'
+                                ? '#71717a'
                                 : '#ef4444',
                             }
                           ]}
@@ -741,23 +929,23 @@ export const ChatScreen: React.FC = () => {
                           <View style={styles.minimizedLeft}>
                             <View style={[
                               styles.circleMarker,
-                              { backgroundColor: m.customizer.type === 'Income' ? '#d1fae5' : m.customizer.type === 'Transfer' ? '#f3f4f6' : '#fee2e2' }
+                              { backgroundColor: m.customizer.type === 'Income' ? 'rgba(47,176,155,0.15)' : m.customizer.type === 'Transfer' ? 'rgba(113,113,122,0.15)' : 'rgba(239,68,68,0.15)' }
                             ]}>
                               <Text style={[
                                 styles.circleMarkerText,
-                                { color: m.customizer.type === 'Income' ? '#059669' : m.customizer.type === 'Transfer' ? '#4b5563' : '#dc2626' }
+                                { color: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444' }
                               ]}>
                                 {m.customizer.type === 'Income' ? '↓' : m.customizer.type === 'Transfer' ? '⇄' : '↑'}
                               </Text>
                             </View>
                             <View style={styles.minimizedMeta}>
-                              <Text style={styles.minimizedAmt}>
+                              <Text style={[styles.minimizedAmt, { color: colors.text }]}>
                                 ₹{m.customizer.amount} {m.customizer.type}
                               </Text>
-                              <Text style={styles.minimizedDesc} numberOfLines={1}>
+                              <Text style={[styles.minimizedDesc, { color: colors.subText }]} numberOfLines={1}>
                                 {m.customizer.type === 'Transfer'
                                   ? `${m.customizer.account} ➔ ${m.customizer.subcategory}`
-                                  : `${m.customizer.description || m.customizer.category}`}
+                                  : `${m.customizer.description || (typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category)}`}
                               </Text>
                             </View>
                           </View>
@@ -768,36 +956,38 @@ export const ChatScreen: React.FC = () => {
                         <View style={[
                           styles.expandedCard,
                           {
-                            borderLeftColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#4b5563' : '#ef4444',
-                            borderBottomColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#4b5563' : '#ef4444',
+                            backgroundColor: colors.card,
+                            borderColor: colors.border,
+                            borderLeftColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444',
+                            borderBottomColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444',
                           }
                         ]}>
                           
                           {/* Title description input */}
                           <TextInput
-                            style={styles.cardInputTitle}
+                            style={[styles.cardInputTitle, { color: colors.text }]}
                             value={m.customizer.description}
                             onChangeText={val => handleUpdateField(m.id, 'description', val)}
                             placeholder="Description..."
-                            placeholderTextColor="#94a3b8"
+                            placeholderTextColor={colors.subText}
                           />
 
                           {/* Date and Amount row */}
                           <View style={styles.cardRow}>
                             <View style={styles.col}>
-                              <Text style={styles.fieldLabel}>Date</Text>
+                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Date</Text>
                               <TouchableOpacity
                                 onPress={() => setShowDatePickerId(m.id)}
-                                style={styles.inlineDatepickerBtn}
+                                style={[styles.inlineDatepickerBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                               >
-                                <Text style={styles.inlineDatepickerText}>
-                                  {new Date(m.customizer.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                                <Text style={[styles.inlineDatepickerText, { color: colors.text }]}>
+                                  {parseSafeDate(m.customizer.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                                 </Text>
-                                <CalendarIcon color="#94a3b8" size={10} />
+                                <CalendarIcon color={colors.subText} size={10} />
                               </TouchableOpacity>
                               {showDatePickerId === m.id && (
                                 <DateTimePicker
-                                  value={new Date(m.customizer.date)}
+                                  value={parseSafeDate(m.customizer.date)}
                                   mode="date"
                                   display="default"
                                   onChange={(event, date) => {
@@ -811,11 +1001,11 @@ export const ChatScreen: React.FC = () => {
                             </View>
                             
                             <View style={[styles.col, { alignItems: 'flex-end' }]}>
-                              <Text style={styles.fieldLabel}>Amount</Text>
+                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Amount</Text>
                               <View style={styles.amountInputWrap}>
-                                <Text style={styles.currencySign}>₹</Text>
+                                <Text style={[styles.currencySign, { color: colors.text }]}>₹</Text>
                                 <TextInput
-                                  style={styles.cardInputAmount}
+                                  style={[styles.cardInputAmount, { color: colors.text }]}
                                   keyboardType="numeric"
                                   value={String(m.customizer.amount)}
                                   onChangeText={val => handleUpdateField(m.id, 'amount', parseFloat(val) || 0)}
@@ -837,35 +1027,35 @@ export const ChatScreen: React.FC = () => {
                           ]}>
                             {/* Type Selector */}
                             <View style={styles.flex1}>
-                              <Text style={styles.fieldLabel}>Type</Text>
+                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Type</Text>
                               <TouchableOpacity
                                 onPress={() => setActiveDropdown(activeDropdown === `${m.id}_type` ? null : `${m.id}_type`)}
-                                style={styles.dropdownSelectBox}
+                                style={[styles.dropdownSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                               >
                                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                   <View style={[
                                     styles.typeSelectCircle,
-                                    { backgroundColor: m.customizer.type === 'Income' ? '#e6f7f4' : m.customizer.type === 'Transfer' ? '#f3f4f6' : '#fee2e2' }
+                                    { backgroundColor: m.customizer.type === 'Income' ? 'rgba(47,176,155,0.15)' : m.customizer.type === 'Transfer' ? 'rgba(113,113,122,0.15)' : 'rgba(239,68,68,0.15)' }
                                   ]}>
                                     <Text style={[
                                       styles.typeSelectCircleText,
-                                      { color: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#4b5563' : '#ef4444' }
+                                      { color: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444' }
                                     ]}>
                                       {m.customizer.type === 'Income' ? '↓' : m.customizer.type === 'Transfer' ? '⇄' : '↑'}
                                     </Text>
                                   </View>
                                   <Text style={[
                                     styles.dropdownSelectText,
-                                    { color: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#4b5563' : '#ef4444' }
+                                    { color: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444' }
                                   ]}>
                                     {m.customizer.type}
                                   </Text>
                                 </View>
-                                <ChevronDownIcon color="#94a3b8" size={10} />
+                                <ChevronDownIcon color={colors.subText} size={10} />
                               </TouchableOpacity>
 
                               {activeDropdown === `${m.id}_type` && (
-                                <View style={styles.dropdownCard}>
+                                <View style={[styles.dropdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                   {(['Expense', 'Income', 'Transfer'] as const).map(tVal => (
                                     <TouchableOpacity
                                       key={tVal}
@@ -881,16 +1071,16 @@ export const ChatScreen: React.FC = () => {
                                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <View style={[
                                           styles.typeSelectCircle,
-                                          { backgroundColor: tVal === 'Income' ? '#e6f7f4' : tVal === 'Transfer' ? '#f3f4f6' : '#fee2e2' }
+                                          { backgroundColor: tVal === 'Income' ? 'rgba(47,176,155,0.15)' : tVal === 'Transfer' ? 'rgba(113,113,122,0.15)' : 'rgba(239,68,68,0.15)' }
                                         ]}>
                                           <Text style={[
                                             styles.typeSelectCircleText,
-                                            { color: tVal === 'Income' ? '#2fb09b' : tVal === 'Transfer' ? '#4b5563' : '#ef4444' }
+                                            { color: tVal === 'Income' ? '#2fb09b' : tVal === 'Transfer' ? '#71717a' : '#ef4444' }
                                           ]}>
                                             {tVal === 'Income' ? '↓' : tVal === 'Transfer' ? '⇄' : '↑'}
                                           </Text>
                                         </View>
-                                        <Text style={styles.dropdownCardText}>{tVal}</Text>
+                                        <Text style={[styles.dropdownCardText, { color: colors.text }]}>{tVal}</Text>
                                       </View>
                                       {m.customizer?.type === tVal && <CheckIcon color="#10b981" size={10} />}
                                     </TouchableOpacity>
@@ -901,22 +1091,22 @@ export const ChatScreen: React.FC = () => {
 
                             {/* Category Selector */}
                             <View style={[styles.flex1, { marginLeft: 8 }]}>
-                              <Text style={styles.fieldLabel}>Category</Text>
+                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Category</Text>
                               <TouchableOpacity
                                 onPress={() => setActiveDropdown(activeDropdown === `${m.id}_cat` ? null : `${m.id}_cat`)}
-                                style={styles.dropdownSelectBox}
+                                style={[styles.dropdownSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                               >
                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 4 }}>
-                                  <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(m.customizer.category, m.customizer.type)}</Text>
-                                  <Text style={styles.dropdownSelectText} numberOfLines={1}>
-                                    {m.customizer.category}
+                                  <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category, m.customizer.type)}</Text>
+                                  <Text style={[styles.dropdownSelectText, { color: colors.text }]} numberOfLines={1}>
+                                    {typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category}
                                   </Text>
                                 </View>
-                                <ChevronDownIcon color="#94a3b8" size={10} />
+                                <ChevronDownIcon color={colors.subText} size={10} />
                               </TouchableOpacity>
 
                               {activeDropdown === `${m.id}_cat` && (
-                                <View style={[styles.dropdownCard, styles.categoryDropdown]}>
+                                <View style={[styles.dropdownCard, styles.categoryDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                   <ScrollView nestedScrollEnabled style={{ maxHeight: 120 }}>
                                     {CATEGORIES.map(c => (
                                       <TouchableOpacity
@@ -929,7 +1119,7 @@ export const ChatScreen: React.FC = () => {
                                       >
                                         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                                           <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(c, m.customizer?.type)}</Text>
-                                          <Text style={styles.dropdownCardText} numberOfLines={1}>{c}</Text>
+                                          <Text style={[styles.dropdownCardText, { color: colors.text }]} numberOfLines={1}>{c}</Text>
                                         </View>
                                         {m.customizer?.category === c && <CheckIcon color="#10b981" size={10} />}
                                       </TouchableOpacity>
@@ -943,22 +1133,22 @@ export const ChatScreen: React.FC = () => {
                           {/* Tags Section */}
                           {m.customizer.type !== 'Transfer' && (
                             <View style={styles.tagsContainer}>
-                              <Text style={styles.fieldLabel}>Tags</Text>
+                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Tags</Text>
                               <View style={styles.tagWrap}>
                                 {m.customizer.tags.split(',').map(t => t.trim()).filter(Boolean).map((tag, tIdx) => (
-                                  <View key={tIdx} style={styles.tagBadge}>
-                                    <Text style={styles.tagBadgeText}>{tag}</Text>
+                                  <View key={tIdx} style={[styles.tagBadge, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                                    <Text style={[styles.tagBadgeText, { color: colors.text }]}>{tag}</Text>
                                     <TouchableOpacity onPress={() => handleRemoveTag(m.id, tag)}>
-                                      <Text style={styles.removeTagText}>×</Text>
+                                      <Text style={[styles.removeTagText, { color: colors.subText }]}>×</Text>
                                     </TouchableOpacity>
                                   </View>
                                 ))}
 
                                 {showAddTagInput === m.id ? (
                                   <TextInput
-                                    style={styles.addTagInput}
+                                    style={[styles.addTagInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                     placeholder="Tag..."
-                                    placeholderTextColor="#94a3b8"
+                                    placeholderTextColor={colors.subText}
                                     autoFocus
                                     value={tagInputValue}
                                     onChangeText={setTagInputValue}
@@ -968,9 +1158,9 @@ export const ChatScreen: React.FC = () => {
                                 ) : (
                                   <TouchableOpacity
                                     onPress={() => setShowAddTagInput(m.id)}
-                                    style={styles.addTagBtn}
+                                    style={[styles.addTagBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                                   >
-                                    <Text style={styles.addTagBtnText}>+</Text>
+                                    <Text style={[styles.addTagBtnText, { color: colors.text }]}>+</Text>
                                   </TouchableOpacity>
                                 )}
                               </View>
@@ -978,7 +1168,7 @@ export const ChatScreen: React.FC = () => {
                           )}
 
                           {/* Advanced expandable Details */}
-                          <View style={styles.advancedDivider}>
+                          <View style={[styles.advancedDivider, { borderTopColor: colors.border }]}>
                             <TouchableOpacity
                               onPress={() => setExpandedDetails(prev => ({ ...prev, [m.id]: !prev[m.id] }))}
                               style={styles.advancedToggle}
@@ -994,17 +1184,17 @@ export const ChatScreen: React.FC = () => {
                                 {m.customizer.type === 'Transfer' ? (
                                   <View style={styles.cardRow}>
                                     <View style={styles.flex1}>
-                                      <Text style={styles.fieldLabel}>From Account</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>From Account</Text>
                                       <TextInput
-                                        style={styles.advancedInput}
+                                        style={[styles.advancedInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                         value={m.customizer.account}
                                         onChangeText={val => handleUpdateField(m.id, 'account', val)}
                                       />
                                     </View>
                                     <View style={[styles.flex1, { marginLeft: 8 }]}>
-                                      <Text style={styles.fieldLabel}>To Account</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>To Account</Text>
                                       <TextInput
-                                        style={styles.advancedInput}
+                                        style={[styles.advancedInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                         value={m.customizer.subcategory}
                                         onChangeText={val => handleUpdateField(m.id, 'subcategory', val)}
                                       />
@@ -1013,19 +1203,19 @@ export const ChatScreen: React.FC = () => {
                                 ) : (
                                   <View style={styles.cardRow}>
                                     <View style={styles.flex1}>
-                                      <Text style={styles.fieldLabel}>Method</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>Method</Text>
                                       <TouchableOpacity
                                         onPress={() => setActiveDropdown(activeDropdown === `${m.id}_method` ? null : `${m.id}_method`)}
-                                        style={styles.advancedSelectBox}
+                                        style={[styles.advancedSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                                       >
-                                        <Text style={styles.advancedSelectBoxText} numberOfLines={1}>
+                                        <Text style={[styles.advancedSelectBoxText, { color: colors.text }]} numberOfLines={1}>
                                           {m.customizer.paymentMethod}
                                         </Text>
-                                        <ChevronDownIcon color="#94a3b8" size={10} />
+                                        <ChevronDownIcon color={colors.subText} size={10} />
                                       </TouchableOpacity>
 
                                       {activeDropdown === `${m.id}_method` && (
-                                        <View style={styles.dropdownCard}>
+                                        <View style={[styles.dropdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                                           {['UPI', 'Card', 'Cash', 'Bank Transfer'].map(method => (
                                             <TouchableOpacity
                                               key={method}
@@ -1035,7 +1225,7 @@ export const ChatScreen: React.FC = () => {
                                               }}
                                               style={styles.dropdownCardItem}
                                             >
-                                              <Text style={styles.dropdownCardText}>{method}</Text>
+                                              <Text style={[styles.dropdownCardText, { color: colors.text }]}>{method}</Text>
                                               {m.customizer?.paymentMethod === method && <CheckIcon color="#10b981" size={10} />}
                                             </TouchableOpacity>
                                           ))}
@@ -1044,26 +1234,33 @@ export const ChatScreen: React.FC = () => {
                                     </View>
 
                                     <View style={[styles.flex1, { marginLeft: 8 }]}>
-                                      <Text style={styles.fieldLabel}>Account</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>Account</Text>
                                       <TextInput
-                                        style={styles.advancedInput}
+                                        style={[styles.advancedInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                         value={m.customizer.account}
                                         onChangeText={val => handleUpdateField(m.id, 'account', val)}
                                       />
                                     </View>
 
                                     <View style={[styles.flex1, { marginLeft: 8 }]}>
-                                      <Text style={styles.fieldLabel}>Time</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>Time</Text>
                                       <TouchableOpacity
                                         onPress={() => setShowTimePickerId(m.id)}
-                                        style={styles.advancedSelectBox}
+                                        style={[styles.advancedSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                                       >
-                                        <Text style={styles.advancedSelectBoxText}>{m.customizer.time}</Text>
+                                        <Text style={[styles.advancedSelectBoxText, { color: colors.text }]}>{m.customizer.time}</Text>
                                       </TouchableOpacity>
 
                                       {showTimePickerId === m.id && (
                                         <DateTimePicker
-                                          value={new Date(`2000-01-01T${m.customizer.time}:00`)}
+                                          value={(() => {
+                                            const timeParts = (m.customizer.time || '12:00').split(':');
+                                            const d = new Date();
+                                            d.setHours(parseInt(timeParts[0], 10) || 12);
+                                            d.setMinutes(parseInt(timeParts[1], 10) || 0);
+                                            d.setSeconds(0);
+                                            return d;
+                                          })()}
                                           mode="time"
                                           display="default"
                                           is24Hour={true}
@@ -1083,25 +1280,25 @@ export const ChatScreen: React.FC = () => {
                                 {m.customizer.type === 'Expense' && (
                                   <View style={styles.cardRow}>
                                     <View style={styles.flex1}>
-                                      <Text style={styles.fieldLabel}>Merchant</Text>
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>Merchant</Text>
                                       <TextInput
-                                        style={styles.advancedInput}
+                                        style={[styles.advancedInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                         value={m.customizer.merchantName}
                                         onChangeText={val => handleUpdateField(m.id, 'merchantName', val)}
                                         placeholder="e.g. Dominos"
-                                        placeholderTextColor="#94a3b8"
+                                        placeholderTextColor={colors.subText}
                                       />
                                     </View>
                                     <View style={[styles.flex1, { marginLeft: 8 }]}>
-                                      <Text style={styles.fieldLabel}>Location</Text>
-                                      <View style={styles.locationInputWrap}>
-                                        <MapPinIcon color="#94a3b8" size={10} />
+                                      <Text style={[styles.fieldLabel, { color: colors.subText }]}>Location</Text>
+                                      <View style={[styles.locationInputWrap, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                                        <MapPinIcon color={colors.subText} size={10} />
                                         <TextInput
-                                          style={[styles.advancedInput, { flex: 1, paddingLeft: 4, height: 26, borderWidth: 0 }]}
+                                          style={[{ flex: 1, paddingLeft: 4, height: 26, borderWidth: 0, fontSize: 8.5, fontWeight: '700', color: colors.text }]}
                                           value={m.customizer.location}
                                           onChangeText={val => handleUpdateField(m.id, 'location', val)}
                                           placeholder="e.g. Karimpur"
-                                          placeholderTextColor="#94a3b8"
+                                          placeholderTextColor={colors.subText}
                                         />
                                       </View>
                                     </View>
@@ -1109,22 +1306,22 @@ export const ChatScreen: React.FC = () => {
                                 )}
 
                                 <View>
-                                  <Text style={styles.fieldLabel}>Notes Log</Text>
+                                  <Text style={[styles.fieldLabel, { color: colors.subText }]}>Notes Log</Text>
                                   <TextInput
-                                    style={styles.notesTextarea}
+                                    style={[styles.notesTextarea, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                     multiline
                                     numberOfLines={2}
                                     value={m.customizer.note}
                                     onChangeText={val => handleUpdateField(m.id, 'note', val)}
                                     placeholder="Notes..."
-                                    placeholderTextColor="#94a3b8"
+                                    placeholderTextColor={colors.subText}
                                   />
                                 </View>
 
                                 {m.customizer.type !== 'Transfer' && (
                                   <View>
                                     <View style={styles.itemsHeader}>
-                                      <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>
+                                      <Text style={[styles.fieldLabel, { marginBottom: 0, color: colors.subText }]}>
                                         Extracted Items ({m.customizer.items.length})
                                       </Text>
                                       <TouchableOpacity onPress={() => handleAddItemRow(m.id)}>
@@ -1135,22 +1332,22 @@ export const ChatScreen: React.FC = () => {
                                     {m.customizer.items.map((item, itemIdx) => (
                                       <View key={itemIdx} style={styles.itemRow}>
                                         <TextInput
-                                          style={styles.itemNameInput}
+                                          style={[styles.itemNameInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                           value={item.name}
                                           onChangeText={val => handleUpdateItem(m.id, itemIdx, 'name', val)}
                                           placeholder="Item name"
-                                          placeholderTextColor="#94a3b8"
+                                          placeholderTextColor={colors.subText}
                                         />
                                         <TextInput
-                                          style={styles.itemPriceInput}
+                                          style={[styles.itemPriceInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
                                           keyboardType="numeric"
                                           value={String(item.price)}
                                           onChangeText={val => handleUpdateItem(m.id, itemIdx, 'price', val)}
                                           placeholder="Price"
-                                          placeholderTextColor="#94a3b8"
+                                          placeholderTextColor={colors.subText}
                                         />
                                         <TouchableOpacity onPress={() => handleDeleteItemRow(m.id, itemIdx)}>
-                                          <TrashIcon color="#71717a" size={12} />
+                                          <TrashIcon color={colors.subText} size={12} />
                                         </TouchableOpacity>
                                       </View>
                                     ))}
@@ -1162,13 +1359,13 @@ export const ChatScreen: React.FC = () => {
                           </View>
 
                           {/* Footer Action Bar */}
-                          <View style={styles.cardFooter}>
+                          <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
                             <TouchableOpacity
                               onPress={() => handleUpdateField(m.id, 'favorite', !m.customizer?.favorite)}
-                              style={styles.footerBtn}
+                              style={[styles.footerBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                             >
                               <StarIcon
-                                color={m.customizer.favorite ? '#f59e0b' : '#94a3b8'}
+                                color={m.customizer.favorite ? '#f59e0b' : colors.subText}
                                 size={14}
                                 fill={m.customizer.favorite ? '#f59e0b' : 'none'}
                               />
@@ -1177,14 +1374,14 @@ export const ChatScreen: React.FC = () => {
                             <View style={styles.footerRight}>
                               <TouchableOpacity
                                 onPress={() => handleSaveCustomizer(m.id)}
-                                style={styles.footerBtn}
+                                style={[styles.footerBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                               >
-                                <PencilIcon color="#10b981" size={14} />
+                                <CheckIcon color="#10b981" size={14} />
                               </TouchableOpacity>
 
                               <TouchableOpacity
                                 onPress={() => handleDismissCustomizer(m.id)}
-                                style={[styles.footerBtn, { marginLeft: 8 }]}
+                                style={[styles.footerBtn, { marginLeft: 8, backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                               >
                                 <TrashIcon color="#ef4444" size={14} />
                               </TouchableOpacity>
@@ -1209,8 +1406,33 @@ export const ChatScreen: React.FC = () => {
         </ScrollView>
 
         {/* COMBINED SCANNER & TEXT INPUT BAR */}
-        <View style={[styles.inputBarContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-          <View style={[styles.inputForm, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+        <View style={[
+          styles.inputBarContainer,
+          {
+            backgroundColor: isDark ? 'rgba(24, 50, 53, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+            borderRadius: 24,
+            marginHorizontal: 16,
+            marginBottom: 0
+          }
+        ]}>
+          {selectedImage && (
+            <View style={[styles.attachmentPreviewBar, { borderColor: colors.border }]}>
+              <Image source={{ uri: selectedImage }} style={styles.attachmentPreviewImage} />
+              <View style={styles.attachmentPreviewInfo}>
+                <Text style={[styles.attachmentPreviewName, { color: colors.text }]} numberOfLines={1}>
+                  Selected Receipt Image
+                </Text>
+                <Text style={[styles.attachmentPreviewSub, { color: colors.subText }]}>
+                  Ready to scan & index
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedImage(null)} style={[styles.attachmentCloseBtn, { backgroundColor: colors.border }]}>
+                <Text style={{ color: colors.text, fontSize: 10, fontWeight: 'bold' }}>×</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={[styles.inputForm, { backgroundColor: colors.inputBackground }]}>
             <View style={styles.scannerActions}>
               {/* Receipt Scan mock button */}
               <TouchableOpacity onPress={handleCameraPress} style={styles.scanBtn}>
@@ -1219,6 +1441,7 @@ export const ChatScreen: React.FC = () => {
             </View>
 
             <TextInput
+              ref={inputRef}
               style={[styles.inputText, { color: colors.text }]}
               placeholder="Type or describe transaction..."
               placeholderTextColor={colors.subText}
@@ -1226,19 +1449,25 @@ export const ChatScreen: React.FC = () => {
               onChangeText={setInputText}
               onSubmitEditing={handleSend}
               editable={!loading}
+              onFocus={() => setKeyboardVisible(true)}
+              onBlur={() => setKeyboardVisible(false)}
             />
 
             <TouchableOpacity
               onPress={handleSend}
-              style={[styles.sendBtn, !inputText.trim() && { backgroundColor: colors.border }, inputText.trim() && { backgroundColor: '#10b981' }]}
-              disabled={loading || !inputText.trim()}
+              style={[
+                styles.sendBtn,
+                !(inputText.trim() || selectedImage) && { backgroundColor: colors.border },
+                (inputText.trim() || selectedImage) && { backgroundColor: '#10b981' }
+              ]}
+              disabled={loading || !(inputText.trim() || selectedImage)}
             >
-              <SendIcon color={inputText.trim() ? '#122325' : colors.subText} size={14} />
+              <SendIcon color={(inputText.trim() || selectedImage) ? '#122325' : colors.subText} size={14} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.inputBarFooter}>
-            <Text style={styles.inputBarFooterText}># Ask Passbook AI Assistant</Text>
+            <Text style={[styles.inputBarFooterText, { color: colors.subText }]}># Ask Passbook AI Assistant</Text>
             <TouchableOpacity onPress={() => handleMockScan('item')} style={styles.quickScanTextBtn}>
               <CameraIcon color="#10b981" size={10} />
               <Text style={styles.quickScanText}>Mock Photo Scan</Text>
@@ -1247,7 +1476,7 @@ export const ChatScreen: React.FC = () => {
         </View>
 
         {/* MODULAR BOTTOM TAB BAR */}
-        <BottomTabBar activeTab="Chat" />
+        {!keyboardVisible && <BottomTabBar activeTab="Chat" />}
 
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -1269,7 +1498,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingBottom: 12,
     backgroundColor: '#183235',
     borderBottomWidth: 1,
     borderBottomColor: '#1f4246',
@@ -1310,7 +1540,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 16,
   },
   msgContainer: {
     marginBottom: 16,
@@ -1332,45 +1562,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   bubbleUser: {
-    backgroundColor: '#ffffff',
-    padding: 12,
-    borderRadius: 16,
-    borderTopRightRadius: 0,
+    backgroundColor: '#4f46e5',
+    padding: 14,
+    borderRadius: 20,
+    borderTopRightRadius: 4,
     maxWidth: '85%',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    elevation: 3,
+    shadowColor: '#4f46e5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   bubbleUserText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#122325',
-    lineHeight: 15,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#ffffff',
+    lineHeight: 18,
   },
   aiMessageWrapper: {
     width: '100%',
     maxWidth: '90%',
   },
   bubbleAI: {
-    backgroundColor: '#183235',
-    padding: 12,
-    borderRadius: 16,
-    borderTopLeftRadius: 0,
-    borderWidth: 1,
-    borderColor: '#224448',
-    elevation: 2,
+    padding: 14,
+    borderRadius: 20,
+    borderTopLeftRadius: 4,
+    borderWidth: 1.5,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
-    shadowRadius: 2,
+    shadowRadius: 4,
   },
   bubbleAIText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#cbd5e1',
-    lineHeight: 15,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
   },
   loadingWrapper: {
     flexDirection: 'row',
@@ -1770,23 +1997,24 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#1f4246',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    marginBottom: 0,
+    // Flat style (removed borders and shadows)
+    borderWidth: 0,
+    elevation: 0,
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
   },
   inputForm: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#122325',
-    borderWidth: 1,
-    borderColor: '#1f4246',
     borderRadius: 16,
     paddingHorizontal: 8,
     height: 40,
+    // Flat style (no border)
+    borderWidth: 0,
   },
   scannerActions: {
     marginRight: 8,
@@ -1944,5 +2172,74 @@ const styles = StyleSheet.create({
   typeSelectCircleText: {
     fontSize: 8,
     fontWeight: '900',
+  },
+  blob1: {
+    position: 'absolute',
+    top: 50,
+    left: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    zIndex: -1,
+  },
+  blob2: {
+    position: 'absolute',
+    bottom: 180,
+    right: -120,
+    width: 350,
+    height: 350,
+    borderRadius: 175,
+    zIndex: -1,
+  },
+  blob3: {
+    position: 'absolute',
+    top: '40%',
+    left: -80,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    zIndex: -1,
+  },
+  blob4: {
+    position: 'absolute',
+    bottom: 50,
+    left: '20%',
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    zIndex: -1,
+  },
+  attachmentPreviewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 8,
+  },
+  attachmentPreviewImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  attachmentPreviewInfo: {
+    flex: 1,
+  },
+  attachmentPreviewName: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  attachmentPreviewSub: {
+    fontSize: 8,
+    fontWeight: '600',
+  },
+  attachmentCloseBtn: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

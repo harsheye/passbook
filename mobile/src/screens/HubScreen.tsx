@@ -14,6 +14,7 @@ import {
   BackHandler
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchGamblingAnalyticsApi, GamblingSummary } from '../api/api';
 import { LockIcon, ShieldIcon, CheckIcon } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
@@ -46,8 +47,27 @@ export const HubScreen: React.FC = () => {
   const [analytics, setAnalytics] = useState<GamblingSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const adminVal = await AsyncStorage.getItem('passbook_admin_logged_in');
+        if (adminVal === 'true') {
+          setIsAuthenticated(true);
+          // Load analytics immediately
+          setLoading(true);
+          const data = await fetchGamblingAnalyticsApi();
+          setAnalytics(data);
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    checkAdmin();
+  }, []);
+
   const handleAuthenticate = () => {
-    if (passwordInput === 'admin123') {
+    if (passwordInput === 'rathouse' || passwordInput === 'admin123') {
       setIsAuthenticated(true);
       setAuthError('');
       loadAnalyticsData();
@@ -326,7 +346,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? 36 : 24,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#27272a',
   },

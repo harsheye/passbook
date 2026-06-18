@@ -5,15 +5,18 @@ export type TabName = 'Home' | 'Transactions' | 'Chat' | 'Schedules' | 'Profile'
 interface TabContextType {
   activeTab: TabName;
   setActiveTab: (tab: TabName) => void;
+  triggerOpenSchedule: number;
+  setTriggerOpenSchedule: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const TabContext = createContext<TabContextType | undefined>(undefined);
 
 export const TabProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<TabName>('Home');
+  const [activeTab, setActiveTab] = useState<TabName>('Chat');
+  const [triggerOpenSchedule, setTriggerOpenSchedule] = useState<number>(0);
 
   return (
-    <TabContext.Provider value={{ activeTab, setActiveTab }}>
+    <TabContext.Provider value={{ activeTab, setActiveTab, triggerOpenSchedule, setTriggerOpenSchedule }}>
       {children}
     </TabContext.Provider>
   );
