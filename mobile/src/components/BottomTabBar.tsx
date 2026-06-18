@@ -8,9 +8,10 @@ import { useTab } from '../context/TabContext';
 
 interface BottomTabBarProps {
   activeTab?: 'Home' | 'Transactions' | 'Chat' | 'Schedules' | 'Profile';
+  inline?: boolean; // when true, render as a normal block (no absolute positioning)
 }
 
-export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
+export const BottomTabBar: React.FC<BottomTabBarProps> = ({ inline = false }) => {
   const { activeTab, setActiveTab } = useTab();
   const { colors, isDark } = useTheme();
 
@@ -20,7 +21,11 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = () => {
   };
 
   return (
-    <View style={[styles.bottomTabBar, { backgroundColor: colors.tabBar }]}>
+    <View style={[
+      styles.bottomTabBar,
+      { backgroundColor: colors.tabBar },
+      inline ? styles.bottomTabBarInline : null
+    ]}>
       {/* Home Tab */}
       <TouchableOpacity
         onPress={() => setActiveTab('Home')}
@@ -94,6 +99,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 0,
+  },
+  bottomTabBarInline: {
+    position: 'relative',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    marginHorizontal: 0,
+    borderRadius: 0,
+    height: 56,
+    paddingHorizontal: 20,
+    marginTop: 8,
   },
   tabBtn: {
     alignItems: 'center',

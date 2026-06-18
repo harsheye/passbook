@@ -270,6 +270,7 @@ export const SchedulesScreen: React.FC = () => {
   const handleApprove = async (id: string) => {
     try {
       await approveOccurrenceApi(id);
+      // refresh silently
       loadData();
     } catch (err) {
       showCustomAlert('Error', 'Failed to approve occurrence.');
@@ -279,6 +280,7 @@ export const SchedulesScreen: React.FC = () => {
   const handleSkip = async (id: string) => {
     try {
       await skipOccurrenceApi(id);
+      // refresh silently
       loadData();
     } catch (err) {
       showCustomAlert('Error', 'Failed to skip occurrence.');
@@ -685,6 +687,7 @@ export const SchedulesScreen: React.FC = () => {
                         await deleteScheduleApi(idToDelete);
                         setDeleteModalOpen(false);
                         setIdToDelete(null);
+                        // refresh silently
                         loadData();
                       } catch (err) {
                         showCustomAlert('Error', 'Failed to cancel schedule.');
@@ -1043,35 +1046,6 @@ export const SchedulesScreen: React.FC = () => {
                 )}
               </View>
             </KeyboardAvoidingView>
-          </View>
-        </Modal>
-
-        {/* SUCCESS MODAL */}
-        <Modal
-          visible={successModalVisible}
-          animationType="fade"
-          transparent={true}
-          onRequestClose={() => {}}
-        >
-          <View style={styles.popupOverlay}>
-            <View style={[styles.popupCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
-              <View style={styles.successCircle}>
-                <Text style={{ fontSize: 24, color: '#ffffff' }}>✓</Text>
-              </View>
-              <Text style={[styles.popupTitle, { color: colors.text, marginTop: 16 }]}>Success</Text>
-              <Text style={[styles.popupBody, { color: colors.subText, textAlign: 'center' }]}>
-                {successModalMessage}
-              </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setSuccessModalVisible(false);
-                  loadData();
-                }}
-                style={styles.successBtn}
-              >
-                <Text style={styles.successBtnText}>Awesome</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </Modal>
 

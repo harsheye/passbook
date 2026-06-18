@@ -12,11 +12,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
+import api from '../api/api';
 
 interface GstTxn {
   id: string;
@@ -197,6 +199,36 @@ export const GstScreen: React.FC = () => {
   };
 
   const summary = getLedgerSummary();
+
+  // Animated badge value (simple pulse)
+  const badgeAnim = new Animated.Value(1);
+  Animated.loop(
+    Animated.sequence([
+      Animated.timing(badgeAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
+      Animated.timing(badgeAnim, { toValue: 1.0, duration: 800, useNativeDriver: true })
+    ])
+  ).start();
+
+  // Quick action to create a suggested ledger transaction into main transactions storage
+  const handleQuickCreateTransaction = async (type: 'Expense' | 'Income', description: string, amount: number, category = 'Miscellaneous') => {
+    try {
+      const payload = {
+        date: new Date().toISOString(),
+        description,
+        amount: type === 'Expense' ? -Math.abs(amount) : Math.abs(amount),
+        type,
+        category,
+        paymentMethod: 'UPI',
+        account: 'SBI',
+        notes: `Created from GST Savings suggestion: ${description}`
+      };
+      await api.post('/api/transactions', payload);
+      Alert.alert('Saved', 'A ledger entry was created and saved to your transactions.');
+    } catch (err) {
+      console.error('Quick create failed', err);
+      Alert.alert('Error', 'Failed to create transaction.');
+    }
+  };
 
   // Guidelines per profession
   const renderProfessionTips = () => {
@@ -403,6 +435,80 @@ export const GstScreen: React.FC = () => {
                 ) : (
                   <Text style={{ color: colors.text, fontSize: 10.5, fontWeight: 'bold' }}>📥 Download Return PDF</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ITC COVERAGE / HEALTH METRICS */}
+          <View style={[styles.itcCard, { backgroundColor: colors.card, borderColor: colors.border }] }>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>🔎 ITC Coverage & Health</Text>
+            <Text style={{ color: colors.subText, fontSize: 12, marginTop: 6 }}>Shows how much of your outward GST is covered by input credits.</Text>
+            <View style={styles.itcRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.subText, fontSize: 11 }}>Outward GST</Text>
+                <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 16 }}>₹{summary.totalOutward.toFixed(2)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.subText, fontSize: 11 }}>Inward GST (ITC)</Text>
+                <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 16 }}>₹{summary.totalInward.toFixed(2)}</Text>
+              </View>
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                <Text style={{ color: colors.subText, fontSize: 11 }}>ITC Coverage</Text>
+                {
+                  (() => {
+                    const coverPct = summary.totalOutward > 0 ? Math.min(100, (summary.totalInward / summary.totalOutward) * 100) : 0;
+                    return <Text style={{ color: coverPct >= 80 ? '#10b981' : coverPct >= 40 ? '#f59e0b' : '#ef4444', fontWeight: '900', fontSize: 16 }}>{coverPct.toFixed(0)}%</Text>;
+                  })()
+                }
+              </View>
+            </View>
+            <View style={{ marginTop: 10 }}>
+              <Text style={{ color: colors.subText, fontSize: 12 }}>Suggestions:</Text>
+              <View style={{ marginTop: 6 }}>
+                {summary.totalOutward - summary.totalInward > 0 ? (
+                  <Text style={{ color: colors.text, fontSize: 13 }}>• Increase compliant purchases to claim more ITC and reduce net GST payable.</Text>
+                ) : (
+                  <Text style={{ color: colors.text, fontSize: 13 }}>• Great — your ITC covers or exceeds outward GST. Consider reconciling invoices to claim refunds.</Text>
+                )}
+                <Text style={{ color: colors.text, fontSize: 13 }}>• Match supplier invoices monthly to avoid ITC reversal later.</Text>
+                <Text style={{ color: colors.text, fontSize: 13 }}>• For small invoicing, consider composition scheme (if eligible) to reduce compliance overhead.</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Small Sparkline (simple bar-based) */}
+          <View style={[styles.sparklineWrap, { backgroundColor: colors.background }]}>            
+            <Text style={{ color: colors.subText, fontSize: 12, marginBottom: 6 }}>ITC trend (last 6 periods)</Text>
+            <View style={styles.sparklineRow}>
+              {Array.from({ length: 6 }).map((_, i) => {
+                // Mock small sample values derived from transactions history
+                const vals = transactions.slice(0, 12).map(t => Math.abs(t.gstAmount));
+                const sample = vals[i] || (i + 1) * 50;
+                const max = Math.max(1, ...vals, 300);
+                const h = Math.max(4, (sample / max) * 40);
+                return <View key={i} style={[styles.sparkBar, { height: h, backgroundColor: i === 0 ? '#6366f1' : '#c7d2fe' }]} />;
+              })}
+            </View>
+          </View>
+
+          {/* Savings Opportunities (quick actions) */}
+          <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 12 }] }>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>⚡ Quick Actions</Text>
+            <Text style={[styles.sectionSub, { color: colors.subText }]}>Create quick ledger entries from suggestions</Text>
+
+            <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => handleQuickCreateTransaction('Expense', 'Bulk purchase of raw materials', 50000, 'Groceries')}
+                style={[styles.quickBtn, { backgroundColor: '#f97316' }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Create Purchase</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleQuickCreateTransaction('Expense', 'Supplier invoice reconciliation entry', 15000, 'Office Supplies')}
+                style={[styles.quickBtn, { backgroundColor: '#059669' }]}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Create ITC</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -971,5 +1077,41 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     fontSize: 10,
+  },
+  itcCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 12,
+  },
+  itcRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  sparklineWrap: {
+    marginTop: 16,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+  },
+  sparklineRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 40,
+    marginTop: 4,
+  },
+  sparkBar: {
+    width: 6,
+    borderRadius: 4,
+  },
+  quickBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
   },
 });

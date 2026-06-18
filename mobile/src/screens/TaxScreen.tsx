@@ -104,6 +104,19 @@ export const TaxScreen: React.FC = () => {
 
   useEffect(() => {
     loadUserProfile();
+    // Load saved checklist selections
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('passbook_tax_checklist');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setCheckedItems(parsed.checked || []);
+          setClaimedAmounts(parsed.claimed || {});
+        }
+      } catch (e) {
+        console.error('Failed to load saved checklist', e);
+      }
+    })();
   }, []);
 
   const loadUserProfile = async () => {
@@ -124,7 +137,34 @@ export const TaxScreen: React.FC = () => {
     }
   };
 
-
+  useEffect(() => {
+    // Persist checklist on changes
+    (async () => {
+      try {
+        await AsyncStorage.setItem('passbook_tax_checklist', JSON.stringify({ checked: checkedItems, claimed: claimedAmounts }));
+      } catch (e) {
+        console.error('Failed to save checklist', e);
+      }
+    })();
+  }, [checkedItems, claimedAmounts]);
+  
+  const handleExportTaxReport = async () => {
+    try {
+      const report = {
+        generatedAt: new Date().toISOString(),
+        profession,
+        grossIncome: grossIncomeStr,
+        otherIncome: otherIncomeStr,
+        deductions: getTotalDeductions(),
+        estimatedTaxNew: tax.totalNewTax,
+        estimatedTaxOld: tax.totalOldTax
+      };
+      await AsyncStorage.setItem('tax_report_pdf', JSON.stringify(report));
+      Alert.alert('Report Saved', 'Tax planning report saved (mock PDF) to app storage.');
+    } catch (e) {
+      Alert.alert('Export Failed', 'Could not save the tax report.');
+    }
+  };
 
   const getCombinedChecklist = () => {
     const profList = PROFESSION_CHECKLISTS[profession] || PROFESSION_CHECKLISTS['Salaried'];
@@ -365,6 +405,29 @@ export const TaxScreen: React.FC = () => {
           <Text style={[styles.optimalBannerText, { color: isNewOptimal ? '#818cf8' : '#10b981' }]}>
             💡 {isNewOptimal ? 'New Regime' : 'Old Regime'} saves you ₹{taxDifference.toLocaleString('en-IN', { maximumFractionDigits: 0 })} in tax liability!
           </Text>
+        </View>
+
+        {/* SAVINGS TIPS SUMMARY */}
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 12, padding: 12 }] }>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>💡 Savings Tips & Next Steps</Text>
+          <Text style={{ color: colors.subText, marginTop: 8 }}>Simple actions you can take today to reduce taxable income or increase deductions.</Text>
+
+          <View style={{ marginTop: 10 }}>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>• Maximize 80C contributions</Text>
+            <Text style={{ color: colors.subText, marginTop: 6 }}>Invest up to ₹1.5L in PPF/EPF/ELSS or pay school fees to get immediate tax relief.</Text>
+
+            <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>• Invest in NPS (Sec 80CCD(1B))</Text>
+            <Text style={{ color: colors.subText, marginTop: 6 }}>Claim an additional ₹50,000 deduction beyond 80C limits for retirement savings.</Text>
+
+            <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>• Review medical insurance (80D)</Text>
+            <Text style={{ color: colors.subText, marginTop: 6 }}>Increase health cover for family or parents before year-end to claim higher 80D deductions.</Text>
+          </View>
+        </View>
+
+        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
+          <TouchableOpacity onPress={handleExportTaxReport} style={{ backgroundColor: '#6366f1', padding: 12, borderRadius: 10, alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>Export Tax Report (PDF)</Text>
+          </TouchableOpacity>
         </View>
 
         {/* SLAB BREAKDOWNS CARD */}

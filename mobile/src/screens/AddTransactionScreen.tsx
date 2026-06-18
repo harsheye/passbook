@@ -150,8 +150,6 @@ export const AddTransactionScreen: React.FC = () => {
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [isCreatingCustomCategory, setIsCreatingCustomCategory] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [successModalMessage, setSuccessModalMessage] = useState('');
   
   // Custom warning modal
   const [alertModalVisible, setAlertModalVisible] = useState(false);
@@ -237,7 +235,8 @@ export const AddTransactionScreen: React.FC = () => {
           merchantName: txnType !== 'Transfer' && merchantName.trim() ? merchantName.trim() : undefined,
           location: txnType !== 'Transfer' && location.trim() ? location.trim() : undefined,
         });
-        setSuccessModalMessage('Statement updated successfully.');
+        // Updated successfully - return to previous screen
+        navigation.goBack();
       } else {
         await createTransactionApi({
           description: description.trim(),
@@ -251,9 +250,9 @@ export const AddTransactionScreen: React.FC = () => {
           merchantName: txnType !== 'Transfer' && merchantName.trim() ? merchantName.trim() : undefined,
           location: txnType !== 'Transfer' && location.trim() ? location.trim() : undefined,
         });
-        setSuccessModalMessage('Statement created successfully.');
+        navigation.goBack();
       }
-      setSuccessModalVisible(true);
+      // no success modal shown
     } catch (err) {
       showCustomAlert('Submission Error', 'Failed to record the transaction locally.');
     } finally {
@@ -266,8 +265,8 @@ export const AddTransactionScreen: React.FC = () => {
     setSubmitting(true);
     try {
       await api.delete(`/api/transactions/${editingTxn.id}`);
-      setSuccessModalMessage('Statement deleted successfully.');
-      setSuccessModalVisible(true);
+      // deletion complete — go back
+      navigation.goBack();
     } catch (err) {
       showCustomAlert('Error', 'Failed to delete statement.');
     } finally {
@@ -731,35 +730,6 @@ export const AddTransactionScreen: React.FC = () => {
                 <Text style={styles.popupBtnTextDelete}>Delete</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* SUCCESS MODAL */}
-      <Modal
-        visible={successModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {}}
-      >
-        <View style={styles.popupOverlay}>
-          <View style={[styles.popupCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
-            <View style={styles.successCircle}>
-              <Text style={{ fontSize: 24, color: '#ffffff' }}>✓</Text>
-            </View>
-            <Text style={[styles.popupTitle, { color: colors.text, marginTop: 16 }]}>Success</Text>
-            <Text style={[styles.popupBody, { color: colors.subText, textAlign: 'center' }]}>
-              {successModalMessage}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setSuccessModalVisible(false);
-                navigation.goBack();
-              }}
-              style={styles.successBtn}
-            >
-              <Text style={styles.successBtnText}>Awesome</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>

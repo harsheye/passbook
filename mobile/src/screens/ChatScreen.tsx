@@ -22,8 +22,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { api, getBaseUrl } from '../api/api';
+import api, { getBaseUrl } from '../api/api';
 import { BottomTabBar } from '../components/BottomTabBar';
+import { ScreenWrapper } from '../components/ScreenWrapper';
 import { useTheme } from '../context/ThemeContext';
 import { useTab } from '../context/TabContext';
 import * as ImagePicker from 'expo-image-picker';
@@ -377,14 +378,14 @@ export const ChatScreen: React.FC = () => {
 
         const newMessages: ChatMessage[] = [];
 
-        txnsList.forEach((t: any, index: number) => {
+        // Attempt to persist AI-parsed transactions immediately so they show up in the transactions list.
+        const savePromises = txnsList.map(async (t: any, index: number) => {
           let parsedMerchant = t.merchantName || '';
           let parsedLocation = '';
           let parsedMood = 'Neutral';
           let parsedTags = 'food';
           let parsedNote = t.notes || '';
 
-          // Preset checks
           if (queryLower.includes('dominos') || queryLower.includes('pizza')) {
             parsedMerchant = 'Dominos';
             parsedLocation = 'Karimpur';
@@ -410,43 +411,127 @@ export const ChatScreen: React.FC = () => {
             ptType = 'Transfer';
           }
 
-          const customMsg: ChatMessage = {
+          const currentTime = getFormattedTime();
+
+          // Build the customizer object as used by the UI
+          const customizerObj = {
+            date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
+            time: currentTime,
+            description: t.description || 'AI Transaction',
+            amount: Math.abs(t.amount) || 1250,
+            category: (typeof t.category === 'object' ? t.category.name : t.category) || 'Eating Out/Ordering In',
+            subcategory: t.subcategory || 'General',
+            paymentMethod: t.paymentMethod || 'UPI',
+            account: t.account || 'SBI',
+            type: ptType,
+            merchantName: parsedMerchant,
+            location: parsedLocation,
+            tags: parsedTags,
+            note: parsedNote,
+            favorite: false,
+            items: t.items || [ { name: t.description || 'General Item', price: Math.abs(t.amount) || 1250 } ]
+          } as any;
+
+          // Prepare payload for persistent transaction (mock API expects signed amounts for expenses)
+          const signedAmt = customizerObj.type === 'Expense' ? -Math.abs(customizerObj.amount) : Math.abs(customizerObj.amount);
+
+          try {
+            const resp = await api.post('/api/transactions', {
+              date: new Date(`${customizerObj.date}T${customizerObj.time || '12:00'}:00`).toISOString(),
+              description: customizerObj.description,
+              amount: signedAmt,
+              type: customizerObj.type,
+              category: customizerObj.category,
+              subcategory: customizerObj.subcategory,
+              paymentMethod: customizerObj.paymentMethod,
+              account: customizerObj.account,
+              notes: customizerObj.note,
+              tags: JSON.stringify((customizerObj.tags || '').split(',').map((s: string) => s.trim()).filter(Boolean)),
+              merchantName: customizerObj.merchantName,
+              location: customizerObj.location,
+              favorite: customizerObj.favorite
+            });
+
+            const txnId = resp?.data?.id;
+
+            const customMsg: ChatMessage = {
+              id: `ai_${Date.now()}_${index}`,
+              sender: 'ai',
+              text: txnsList.length > 1
+                ? `I detected Category "${customizerObj.category}". I have recorded a ledger entry and you can customize it below:`
+                : 'I have parsed and recorded your transaction. You can customize or dismiss it below:',
+              customizer: {
+                ...customizerObj,
+                isCommitted: true,
+                committedTransactionId: txnId,
+                isMinimized: true
+              }
+            };
+
+            return customMsg;
+
+          } catch (saveErr) {
+            // If saving fails, fallback to non-committed customizer so user can save manually
+            const customMsg: ChatMessage = {
+              id: `ai_${Date.now()}_${index}`,
+              sender: 'ai',
+              text: txnsList.length > 1
+                ? `I detected Category "${customizerObj.category}". Confirm, customize, and save this split ledger entry below:`
+                : 'I have successfully parsed your sentence. Confirm, customize, and save the ledger entry below:',
+              customizer: customizerObj
+            };
+            return customMsg;
+          }
+        });
+
+        // Wait for all save attempts to finish, then append messages at once
+        try {
+          const savedMsgs = await Promise.all(savePromises);
+          // Ensure mock backend/AsyncStorage is refreshed so other screens see new transactions
+          try {
+            await api.get('/api/transactions');
+          } catch (refreshErr) {
+            console.warn('Failed to refresh transactions after AI save:', refreshErr);
+          }
+          // Slight timeout to keep UX consistent with prior behaviour
+          setTimeout(() => {
+            const finalMsgs = [...updatedMsgs, ...savedMsgs];
+            setMessages(finalMsgs);
+            saveHistory(finalMsgs);
+            setLoading(false);
+            scrollToBottom();
+          }, 300);
+        } catch (err) {
+          // If something unexpected fails, still show parsed messages without commit flags
+          const fallbackMsgs: ChatMessage[] = txnsList.map((t: any, index: number) => ({
             id: `ai_${Date.now()}_${index}`,
             sender: 'ai',
-            text: txnsList.length > 1
-              ? `I detected Category "${t.category}". Confirm, customize, and save this split ledger entry below:`
-              : 'I have successfully parsed your sentence. Confirm, customize, and save the ledger entry below:',
+            text: 'I have parsed your sentence. Confirm, customize, and save the ledger entry below:',
             customizer: {
               date: t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0],
-              time: currentTime,
+              time: getFormattedTime(),
               description: t.description || 'AI Transaction',
               amount: Math.abs(t.amount) || 1250,
               category: (typeof t.category === 'object' ? t.category.name : t.category) || 'Eating Out/Ordering In',
               subcategory: t.subcategory || 'General',
               paymentMethod: t.paymentMethod || 'UPI',
               account: t.account || 'SBI',
-              type: ptType,
-              merchantName: parsedMerchant,
-              location: parsedLocation,
-              tags: parsedTags,
-              note: parsedNote,
+              type: (t.transactionType || t.type || 'Expense'),
+              merchantName: t.merchantName || '',
+              location: '',
+              tags: t.tags || '',
+              note: t.notes || '',
               favorite: false,
-              items: t.items || [
-                { name: t.description || 'General Item', price: Math.abs(t.amount) || 1250 }
-              ]
+              items: t.items || [{ name: t.description || 'General Item', price: Math.abs(t.amount) || 1250 }]
             }
-          };
+          }));
 
-          newMessages.push(customMsg);
-        });
-
-        setTimeout(() => {
-          const finalMsgs = [...updatedMsgs, ...newMessages];
+          const finalMsgs = [...updatedMsgs, ...fallbackMsgs];
           setMessages(finalMsgs);
           saveHistory(finalMsgs);
           setLoading(false);
           scrollToBottom();
-        }, 800);
+        }
 
       } catch (err) {
         const finalMsgs = [
@@ -805,8 +890,9 @@ export const ChatScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
+    <ScreenWrapper>
+      <View style={[styles.safeArea, { backgroundColor: colors.background }]}>
+       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       
       {/* Background Blobs for vibrant color backdrop */}
       <View style={[styles.blob1, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.16)' : 'rgba(139, 92, 246, 0.08)' }]} pointerEvents="none" />
@@ -1475,12 +1561,13 @@ export const ChatScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* MODULAR BOTTOM TAB BAR */}
-        {!keyboardVisible && <BottomTabBar activeTab="Chat" />}
+        {/* MODULAR BOTTOM TAB BAR (inline footer to avoid absolute overlap) */}
+        {!keyboardVisible && <BottomTabBar inline activeTab="Chat" />}
 
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+       </KeyboardAvoidingView>
+       </View>
+     </ScreenWrapper>
+   );
 };
 
 const styles = StyleSheet.create({
@@ -1871,11 +1958,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   advancedToggleText: {
-    fontSize: 8.5,
     fontWeight: '900',
     color: '#2fb09b',
     marginRight: 4,
     textTransform: 'uppercase',
+    fontSize: 9,
   },
   advancedBlock: {
     marginTop: 8,

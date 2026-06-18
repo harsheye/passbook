@@ -23,6 +23,9 @@ import { BottomTabBar } from '../components/BottomTabBar';
 import { SparklesIcon } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 import { useTab } from '../context/TabContext';
+import LinearGradient from 'react-native-linear-gradient';
+import { LineChart } from 'react-native-chart-kit';
+import LottieView from 'lottie-react-native';
 
 interface DashboardSummaryData {
   summary: {
@@ -121,6 +124,24 @@ const CATEGORY_COLORS: Record<string, string> = {
   'Utilities': '#64748b',
   'Freelancing': '#a855f7', // Purple
 };
+
+// Chart configuration for react-native-chart-kit
+const chartConfig = {
+  backgroundGradientFrom: '#ffffff',
+  backgroundGradientTo: '#ffffff',
+  color: (opacity = 1) => `rgba(16,185,129, ${opacity})`,
+  strokeWidth: 2,
+  useShadowColorFromDataset: false,
+  decimalPlaces: 0,
+};
+
+// Try to require a Lottie animation if present. This keeps the app from failing if the asset is missing.
+let sparkleAnim: any = null;
+try {
+  sparkleAnim = require('../assets/animations/sparkles.json');
+} catch (e) {
+  sparkleAnim = null;
+}
 
 export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
@@ -618,15 +639,63 @@ export const DashboardScreen: React.FC = () => {
   };
 
   // Helper to handle mock pdf generation
-  const handleDownloadPdf = (type: 'report' | 'tax') => {
+  const handleDownloadPdf = async (type: 'report' | 'tax') => {
     setDownloadingPdf(true);
-    setTimeout(() => {
+    try {
+      const RNHTMLtoPDF = require('react-native-html-to-pdf');
+      const RNFS = require('react-native-fs');
+
+      // Build a simple HTML summary for the PDF
+      const html = `
+        <html>
+          <body style="font-family: -apple-system, Roboto, 'Helvetica Neue', Arial; padding: 20px;">
+            <h2>${type === 'report' ? 'Statement Report' : 'Tax Statement'}</h2>
+            <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+            <h3>Summary</h3>
+            <ul>
+              <li>Total Inflows: ₹${(data?.summary.totalIncome || 0).toLocaleString('en-IN')}</li>
+              <li>Total Outflows: ₹${(data?.summary.totalExpenses || 0).toLocaleString('en-IN')}</li>
+              <li>Net Savings: ₹${((data?.summary.totalIncome || 0) - (data?.summary.totalExpenses || 0)).toLocaleString('en-IN')}</li>
+            </ul>
+            <h3>Recent Transactions</h3>
+            <table style="width:100%; border-collapse: collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:6px; border-bottom:1px solid #ddd">Date</th>
+                  <th style="text-align:left; padding:6px; border-bottom:1px solid #ddd">Description</th>
+                  <th style="text-align:right; padding:6px; border-bottom:1px solid #ddd">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${transactions.slice(0, 10).map(t => {
+                  const dt = new Date(t.transactionDate || (t as any).date).toLocaleDateString('en-GB');
+                  const amt = (t.amount || 0);
+                  return `<tr><td style="padding:6px; border-bottom:1px solid #f1f1f1">${dt}</td><td style="padding:6px; border-bottom:1px solid #f1f1f1">${t.description}</td><td style="padding:6px; border-bottom:1px solid #f1f1f1; text-align:right">₹${amt.toLocaleString('en-IN')}</td></tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `;
+
+      const options = {
+        html,
+        fileName: `passbook_${type}_${Date.now()}`,
+        base64: false,
+      };
+
+      const file = await RNHTMLtoPDF.convert(options);
+      // file.filePath contains the generated PDF path
+      const savedPath = file.filePath;
+
+      // On Android, we may want to move it to external storage; keep it simple and inform the user.
+      Alert.alert('Download Complete', `PDF saved to: ${savedPath}`);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      Alert.alert('Error', 'Failed to generate PDF.');
+    } finally {
       setDownloadingPdf(false);
-      Alert.alert(
-        'Download Complete',
-        `${type === 'report' ? 'Statement Report' : 'Tax Assessment'} PDF has been successfully generated and saved to your local storage.`
-      );
-    }, 1500);
+    }
   };
 
   // Filter and group chart data: exclude the selectedCategory if not "All"
@@ -749,7 +818,7 @@ export const DashboardScreen: React.FC = () => {
   const hasData = data && (data.summary.totalIncome > 0 || data.summary.totalExpenses > 0);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}> 
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
       <View style={[styles.container, { backgroundColor: colors.background }]}>
 
@@ -801,27 +870,46 @@ export const DashboardScreen: React.FC = () => {
             )}
 
             {/* CONSOLIDATED NET WORTH CARD */}
-            <View style={[styles.netWorthCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.netWorthLabel, { color: colors.subText }]}>CONSOLIDATED NET WORTH</Text>
-              <Text style={[styles.netWorthVal, { color: colors.text }]}>
+            <LinearGradient colors={['#06b6d4', '#10b981']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.netWorthCard, { borderColor: colors.border }] }>
+              <Text style={[styles.netWorthLabel, { color: '#ffffff' }]}>CONSOLIDATED NET WORTH</Text>
+              <Text style={[styles.netWorthVal, { color: '#ffffff' }]}>
                 ₹{((data?.summary.totalIncome || 0) - (data?.summary.totalExpenses || 0)).toLocaleString('en-IN')}
               </Text>
               <View style={styles.netWorthRow}>
                 <View style={styles.netWorthCol}>
-                  <Text style={[styles.netWorthColLabel, { color: colors.subText }]}>TOTAL INFLOWS</Text>
-                  <Text style={[styles.netWorthColAmt, styles.incomeColor]}>
+                  <Text style={[styles.netWorthColLabel, { color: 'rgba(255,255,255,0.9)' }]}>TOTAL INFLOWS</Text>
+                  <Text style={[styles.netWorthColAmt, { color: '#d1fae5' }]}>
                     ₹{(data?.summary.totalIncome || 0).toLocaleString('en-IN')}
                   </Text>
                 </View>
-                <View style={[styles.netWorthDivider, { backgroundColor: colors.border }]} />
+                <View style={[styles.netWorthDivider, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
                 <View style={styles.netWorthCol}>
-                  <Text style={[styles.netWorthColLabel, { color: colors.subText }]}>TOTAL OUTFLOWS</Text>
-                  <Text style={[styles.netWorthColAmt, styles.expenseColor]}>
+                  <Text style={[styles.netWorthColLabel, { color: 'rgba(255,255,255,0.9)' }]}>TOTAL OUTFLOWS</Text>
+                  <Text style={[styles.netWorthColAmt, { color: '#fecaca' }]}>
                     ₹{(data?.summary.totalExpenses || 0).toLocaleString('en-IN')}
                   </Text>
                 </View>
               </View>
-            </View>
+
+              {/* Small sparkline chart using react-native-chart-kit */}
+              <View style={{ marginTop: 12 }}>
+                <LineChart
+                  data={{
+                    labels: ['Inflows', 'Outflows', 'Net'],
+                    datasets: [{ data: [displayIncome || 0, Math.abs(displayExpense) || 0, (displayIncome - Math.abs(displayExpense)) || 0] }]
+                  }}
+                  width={Dimensions.get('window').width - 64}
+                  height={120}
+                  chartConfig={chartConfig}
+                  withDots={false}
+                  withInnerLines={false}
+                  withOuterLines={false}
+                  withShadow={false}
+                  bezier
+                  style={{ borderRadius: 16 }}
+                />
+              </View>
+            </LinearGradient>
 
             {/* FINANCIAL HUB SHORTCUTS */}
             {(() => {
@@ -923,20 +1011,24 @@ export const DashboardScreen: React.FC = () => {
             </View>
 
             {/* METRICS ROW (AI INSIGHTS AS WELL) */}
-            {hasData && data && (
+             {hasData && data && (
               <View style={[styles.insightsCard, { borderColor: colors.border }]}>
                 <View style={styles.insightsHeader}>
-                  <SparklesIcon color="#2fb09b" size={14} />
+                  {sparkleAnim ? (
+                    <LottieView source={sparkleAnim} autoPlay loop style={{ width: 22, height: 22 }} />
+                  ) : (
+                    <SparklesIcon color="#2fb09b" size={14} />
+                  )}
                   <Text style={styles.insightsTitle}>LEDGER INTELLIGENCE</Text>
                 </View>
-                {data.insights.map((insight, idx) => (
-                  <View key={idx} style={styles.insightItem}>
-                    <Text style={styles.insightBullet}>•</Text>
-                    <Text style={styles.insightText}>{insight}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+                 {data.insights.map((insight, idx) => (
+                   <View key={idx} style={styles.insightItem}>
+                     <Text style={styles.insightBullet}>•</Text>
+                     <Text style={styles.insightText}>{insight}</Text>
+                   </View>
+                 ))}
+               </View>
+             )}
 
           </ScrollView>
         )}

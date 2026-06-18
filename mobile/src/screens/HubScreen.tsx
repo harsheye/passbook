@@ -235,6 +235,52 @@ export const HubScreen: React.FC = () => {
               </View>
             </View>
 
+            {/* ACTIONABLE INSIGHTS & RECOMMENDATIONS */}
+            <View style={[styles.recommendationsBox, { backgroundColor: colors.card, borderColor: colors.border }] }>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>💡 Actionable Insights</Text>
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ color: colors.subText }}>Platform Profit Distribution</Text>
+                    <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                      {analytics.platformMetrics && analytics.platformMetrics.slice(0,3).map((p:any, idx:number) => (
+                        <View key={idx} style={{ alignItems: 'center', marginRight: 12 }}>
+                          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: idx === 0 ? '#6366f1' : idx === 1 ? '#f97316' : '#059669', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontWeight: '800' }}>{p.name?.charAt(0) || 'P'}</Text>
+                          </View>
+                          <Text style={{ color: colors.text, fontSize: 11, marginTop: 6 }}>{p.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      // Export CSV (mocked)
+                      const csv = ['name,deposits,withdrawals,netProfit'];
+                      (analytics.platformMetrics||[]).forEach((p:any) => csv.push(`${p.name},${p.deposits||0},${p.withdrawals||0},${p.netProfit||0}`));
+                      // Mock download alert
+                      Alert.alert('Export CSV', 'Platform metrics exported to downloads (mock).');
+                    }}
+                    style={{ padding: 8, backgroundColor: '#6366f1', borderRadius: 8 }}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '800' }}>Export CSV</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Text style={{ color: colors.subText, marginTop: 8 }}>Practical steps derived from platform performance to reduce exposures and improve returns.</Text>
+
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>1. Limit exposure per platform</Text>
+                <Text style={{ color: colors.subText, marginTop: 6 }}>Cap your deposit per platform to a fixed percentage of your risk capital to avoid concentrated losses.</Text>
+
+                <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>2. Track ROI by platform</Text>
+                <Text style={{ color: colors.subText, marginTop: 6 }}>Move capital away from platforms with negative ROI over the last 6 months.</Text>
+
+                <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>3. Withdraw winning streaks</Text>
+                <Text style={{ color: colors.subText, marginTop: 6 }}>Lock in profits by withdrawing a portion after net positive runs.</Text>
+              </View>
+            </View>
+
           </ScrollView>
         )}
 
@@ -537,5 +583,18 @@ const styles = StyleSheet.create({
   },
   negativeText: {
     color: '#f43f5e',
+  },
+  recommendationsBox: {
+    borderWidth: 1,
+    borderColor: '#27272a',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#f4f4f5',
+    marginBottom: 12,
   },
 });
