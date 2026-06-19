@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NavigationContainer } from '@react-navigation/native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { autodetectBaseUrl } from './src/api/api';
 import { ThemeProvider } from './src/context/ThemeContext';
@@ -46,15 +47,18 @@ function App(): React.JSX.Element {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <TabProvider>
-          <NavigationContainer>
-            <AppNavigator />
-          </NavigationContainer>
-        </TabProvider>
-      </ThemeProvider>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <TabProvider>
+            <NavigationContainer>
+              <AppNavigator />
+            </NavigationContainer>
+          </TabProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
 
 export default App;

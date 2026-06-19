@@ -35,7 +35,7 @@ export const MainTabScreen: React.FC = () => {
       </View>
 
       {/* Global Floating Action Button Overlay */}
-      {activeTab !== 'Chat' && activeTab !== 'Profile' && (
+      {(activeTab === 'Transactions' || activeTab === 'Schedules') && (
         <TouchableOpacity
           onPress={() => {
             if (activeTab === 'Schedules') {
@@ -63,7 +63,7 @@ export const MainTabScreen: React.FC = () => {
 const styles = StyleSheet.create({
   globalFab: {
     position: 'absolute',
-    bottom: 115,
+    bottom: 80,
     right: 20,
     width: 46,
     height: 46,

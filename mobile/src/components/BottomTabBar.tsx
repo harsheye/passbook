@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, Keyboard } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { HomeIcon, ListIcon, SparklesIcon, UserIcon, CalendarIcon } from './SvgIcons';
@@ -11,9 +11,21 @@ interface BottomTabBarProps {
   inline?: boolean; // when true, render as a normal block (no absolute positioning)
 }
 
-export const BottomTabBar: React.FC<BottomTabBarProps> = ({ inline = false }) => {
+export const BottomTabBar: React.FC<BottomTabBarProps> = ({ inline = true }) => {
   const { activeTab, setActiveTab } = useTab();
   const { colors, isDark } = useTheme();
+
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  if (keyboardVisible) return null;
 
   const getTabColor = (tabName: string, activeColor: string) => {
     if (activeTab === tabName) return activeColor;
@@ -81,16 +93,18 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ inline = false }) =>
 
 const styles = StyleSheet.create({
   bottomTabBar: {
+    // Absolute by default but with minimal offset so it doesn't consume excessive space
     position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
-    height: 60,
-    borderRadius: 20,
+    bottom: 16,
+    left: 12,
+    right: 12,
+    height: 56,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 10,
+    paddingVertical: 6,
     // Explicitly remove shadows and borders for clean flat look
     borderWidth: 0,
     borderColor: 'transparent',
@@ -108,8 +122,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     borderRadius: 0,
     height: 56,
-    paddingHorizontal: 20,
-    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 4,
   },
   tabBtn: {
     alignItems: 'center',
@@ -118,9 +133,9 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   tabText: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: '800',
-    marginTop: 2,
+    marginTop: 4,
     textTransform: 'uppercase',
   },
   centerTabWrapper: {
@@ -128,7 +143,7 @@ const styles = StyleSheet.create({
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 0,
   },
   centerTabBtn: {
     width: 42,

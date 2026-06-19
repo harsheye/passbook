@@ -169,3 +169,10 @@ export const SaltLogo: React.FC<IconProps & { strokeWidth?: number }> = ({ color
     <Path d="M50 75 L50 95" />
   </Svg>
 );
+
+export const FilterIcon: React.FC<IconProps> = ({ color = '#94a3b8', size = 16 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+  </Svg>
+);
+

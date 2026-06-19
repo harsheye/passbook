@@ -11,9 +11,26 @@ export const autodetectBaseUrl = async (): Promise<string> => {
   return 'http://localhost:5000';
 };
 
-export const fetchTransactionsApi = async (search: string, type: string): Promise<Transaction[]> => {
+export const fetchTransactionsApi = async (
+  searchOrParams: string | {
+    search?: string;
+    type?: string;
+    category?: string;
+    paymentMethod?: string;
+    minAmount?: string;
+    maxAmount?: string;
+  } = {},
+  type?: string
+): Promise<Transaction[]> => {
+  let params: any = {};
+  if (typeof searchOrParams === 'string') {
+    params.search = searchOrParams;
+    params.type = type;
+  } else {
+    params = searchOrParams;
+  }
   const res = await api.get('/api/transactions', {
-    params: { search, type },
+    params,
   });
   return res.data;
 };

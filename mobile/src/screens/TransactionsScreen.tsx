@@ -11,7 +11,8 @@ import {
   SafeAreaView,
   Platform,
   ScrollView,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -22,7 +23,8 @@ import {
   PlusIcon,
   ChevronDownIcon,
   CheckIcon,
-  CalendarIcon
+  CalendarIcon,
+  FilterIcon
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 
@@ -79,6 +81,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   'GST/Tax': '🧾'
 };
 
+const FILTER_PAYMENT_METHODS = ['All', 'UPI', 'Card', 'Cash', 'Net Banking'];
+
 export const TransactionsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
@@ -86,8 +90,25 @@ export const TransactionsScreen: React.FC = () => {
   // States
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Filter States (Applied)
   const [search, setSearch] = useState('');
   const [type, setType] = useState(''); // '', 'Expense', 'Income', 'Transfer'
+  const [selectedCategory, setSelectedCategory] = useState(''); // '' means all
+  const [paymentMethod, setPaymentMethod] = useState(''); // '' means all
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+
+  // Filter Modal States
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [tempSearch, setTempSearch] = useState('');
+  const [tempType, setTempType] = useState('');
+  const [tempCategory, setTempCategory] = useState('');
+  const [tempPaymentMethod, setTempPaymentMethod] = useState('');
+  const [tempMinAmount, setTempMinAmount] = useState('');
+  const [tempMaxAmount, setTempMaxAmount] = useState('');
+  const [modalCategoryDropdownOpen, setModalCategoryDropdownOpen] = useState(false);
+  const [modalPmDropdownOpen, setModalPmDropdownOpen] = useState(false);
   
   // Dropdown state
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
@@ -155,7 +176,14 @@ export const TransactionsScreen: React.FC = () => {
       setLoading(true);
     }
     try {
-      const data = await fetchTransactionsApi(search, type);
+      const data = await fetchTransactionsApi({
+        search,
+        type,
+        category: selectedCategory,
+        paymentMethod,
+        minAmount,
+        maxAmount
+      });
       setTransactions(data);
     } catch (err) {
       console.error('Failed to load transactions:', err);
@@ -164,10 +192,41 @@ export const TransactionsScreen: React.FC = () => {
     }
   };
 
-  // Reload when search or type filter changes
+  // Reload when filters change
   useEffect(() => {
     loadData();
-  }, [search, type]);
+  }, [search, type, selectedCategory, paymentMethod, minAmount, maxAmount]);
+
+  const openFilterModal = () => {
+    setTempSearch(search);
+    setTempType(type);
+    setTempCategory(selectedCategory);
+    setTempPaymentMethod(paymentMethod);
+    setTempMinAmount(minAmount);
+    setTempMaxAmount(maxAmount);
+    setModalCategoryDropdownOpen(false);
+    setModalPmDropdownOpen(false);
+    setFilterModalOpen(true);
+  };
+
+  const applyFilters = () => {
+    setSearch(tempSearch);
+    setType(tempType);
+    setSelectedCategory(tempCategory);
+    setPaymentMethod(tempPaymentMethod);
+    setMinAmount(tempMinAmount);
+    setMaxAmount(tempMaxAmount);
+    setFilterModalOpen(false);
+  };
+
+  const resetFilters = () => {
+    setTempSearch('');
+    setTempType('');
+    setTempCategory('');
+    setTempPaymentMethod('');
+    setTempMinAmount('');
+    setTempMaxAmount('');
+  };
 
   // Reload when screen gains focus
   useFocusEffect(
@@ -492,6 +551,20 @@ export const TransactionsScreen: React.FC = () => {
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Filter Button */}
+            <TouchableOpacity
+              onPress={openFilterModal}
+              style={[
+                styles.headerBtn,
+                {
+                  backgroundColor: (search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#6366f1' : colors.card,
+                  borderColor: (search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#6366f1' : colors.border
+                }
+              ]}
+            >
+              <FilterIcon color={(search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#ffffff' : colors.text} size={16} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={() => setViewMode(viewMode === 'list' ? 'calendar' : 'list')}
               style={[
@@ -592,6 +665,194 @@ export const TransactionsScreen: React.FC = () => {
           )}
         </View>
 
+        {/* FILTER MODAL */}
+        <Modal
+          visible={filterModalOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setFilterModalOpen(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalSheet, { backgroundColor: colors.card, borderTopColor: colors.border, borderWidth: 1 }]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.text }]}>FILTER TRANSACTIONS</Text>
+                <TouchableOpacity
+                  onPress={() => setFilterModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                >
+                  <Text style={[styles.modalCloseText, { color: colors.subText }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                <View style={{ gap: 16 }}>
+                  
+                  {/* Search query */}
+                  <View>
+                    <Text style={styles.formLabel}>Search Description / Merchant</Text>
+                    <View style={[styles.modalInputContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                      <SearchIcon color={colors.subText} size={14} />
+                      <TextInput
+                        style={[styles.modalTextInput, { color: colors.text }]}
+                        placeholder="e.g. Dominos, Starbucks"
+                        placeholderTextColor={colors.subText}
+                        value={tempSearch}
+                        onChangeText={setTempSearch}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Transaction Type */}
+                  <View>
+                    <Text style={styles.formLabel}>Transaction Type</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                      {['All', 'Income', 'Expense', 'Transfer'].map(t => {
+                        const label = t === 'All' ? '' : t;
+                        const isSelected = tempType === label;
+                        return (
+                          <TouchableOpacity
+                            key={t}
+                            onPress={() => setTempType(label)}
+                            style={[
+                              styles.typeFilterBtn,
+                              {
+                                backgroundColor: isSelected ? '#6366f1' : colors.inputBackground,
+                                borderColor: isSelected ? '#6366f1' : colors.border
+                              }
+                            ]}
+                          >
+                            <Text style={[styles.typeFilterText, { color: isSelected ? '#ffffff' : colors.text }]}>{t}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Category Dropdown */}
+                  <View style={{ zIndex: 120 }}>
+                    <Text style={styles.formLabel}>Category</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setModalCategoryDropdownOpen(!modalCategoryDropdownOpen);
+                        setModalPmDropdownOpen(false);
+                      }}
+                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
+                        {tempCategory || 'All Categories'}
+                      </Text>
+                      <ChevronDownIcon color={colors.subText} size={12} />
+                    </TouchableOpacity>
+                    {modalCategoryDropdownOpen && (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {['All', ...Object.keys(CATEGORY_ICONS)].map(c => {
+                            const label = c === 'All' ? '' : c;
+                            return (
+                              <TouchableOpacity
+                                key={c}
+                                onPress={() => {
+                                  setTempCategory(label);
+                                  setModalCategoryDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{c}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Payment Method Dropdown */}
+                  <View style={{ zIndex: 110 }}>
+                    <Text style={styles.formLabel}>Payment Method</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setModalPmDropdownOpen(!modalPmDropdownOpen);
+                        setModalCategoryDropdownOpen(false);
+                      }}
+                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
+                        {tempPaymentMethod || 'All Payment Methods'}
+                      </Text>
+                      <ChevronDownIcon color={colors.subText} size={12} />
+                    </TouchableOpacity>
+                    {modalPmDropdownOpen && (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {FILTER_PAYMENT_METHODS.map(pm => {
+                            const label = pm === 'All' ? '' : pm;
+                            return (
+                              <TouchableOpacity
+                                key={pm}
+                                onPress={() => {
+                                  setTempPaymentMethod(label);
+                                  setModalPmDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{pm}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Amount Range */}
+                  <View>
+                    <Text style={styles.formLabel}>Amount Range (₹)</Text>
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={[styles.rangeInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                          placeholder="Min"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          value={tempMinAmount}
+                          onChangeText={setTempMinAmount}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={[styles.rangeInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                          placeholder="Max"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          value={tempMaxAmount}
+                          onChangeText={setTempMaxAmount}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Actions */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
+                    <TouchableOpacity
+                      onPress={resetFilters}
+                      style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                    >
+                      <Text style={{ color: colors.text, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Reset</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={applyFilters}
+                      style={[styles.actionBtn, { backgroundColor: '#6366f1' }]}
+                    >
+                      <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Apply Filters</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
         {/* BOTTOM TAB BAR */}
         <BottomTabBar activeTab="Transactions" />
 
@@ -612,7 +873,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
@@ -731,7 +992,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 130,
+    paddingBottom: 80,
   },
   dateHeader: {
     flexDirection: 'row',
@@ -928,6 +1189,115 @@ const styles = StyleSheet.create({
   clearSelectBtn: {
     paddingVertical: 4,
     paddingHorizontal: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(9, 9, 11, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  formLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    color: '#94a3b8',
+  },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+    height: 42,
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    height: '100%',
+  },
+  typeFilterBtn: {
+    flex: 1,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  typeFilterText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  modalDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    marginTop: 2,
+  },
+  modalDropdownText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  modalMenu: {
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  modalMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalMenuText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  rangeInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  actionBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

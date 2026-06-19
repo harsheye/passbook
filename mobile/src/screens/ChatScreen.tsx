@@ -144,6 +144,8 @@ export const ChatScreen: React.FC = () => {
   
   // Dropdowns and date/time pickers
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
+  const [activeMessageIdForCategory, setActiveMessageIdForCategory] = useState<string | null>(null);
   const [showDatePickerId, setShowDatePickerId] = useState<string | null>(null);
   const [showTimePickerId, setShowTimePickerId] = useState<string | null>(null);
 
@@ -945,8 +947,16 @@ export const ChatScreen: React.FC = () => {
 
           {messages.map(m => {
             const isUser = m.sender === 'user';
+            const isDropdownActive = activeDropdown && activeDropdown.startsWith(m.id);
             return (
-              <View key={m.id} style={[styles.msgContainer, isUser ? styles.msgUser : styles.msgAI]}>
+              <View
+                key={m.id}
+                style={[
+                  styles.msgContainer,
+                  isUser ? styles.msgUser : styles.msgAI,
+                  isDropdownActive ? { zIndex: 100, elevation: 10 } : { zIndex: 1 }
+                ]}
+              >
                 <Text style={[styles.senderLabel, { color: colors.subText }]}>
                   {isUser ? 'You' : 'Passbook Assistant'}
                 </Text>
@@ -1046,7 +1056,8 @@ export const ChatScreen: React.FC = () => {
                             borderColor: colors.border,
                             borderLeftColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444',
                             borderBottomColor: m.customizer.type === 'Income' ? '#2fb09b' : m.customizer.type === 'Transfer' ? '#71717a' : '#ef4444',
-                          }
+                          },
+                          isDropdownActive ? { zIndex: 100, overflow: 'visible' } : null
                         ]}>
                           
                           {/* Title description input */}
@@ -1176,44 +1187,24 @@ export const ChatScreen: React.FC = () => {
                             </View>
 
                             {/* Category Selector */}
-                            <View style={[styles.flex1, { marginLeft: 8 }]}>
-                              <Text style={[styles.fieldLabel, { color: colors.subText }]}>Category</Text>
-                              <TouchableOpacity
-                                onPress={() => setActiveDropdown(activeDropdown === `${m.id}_cat` ? null : `${m.id}_cat`)}
-                                style={[styles.dropdownSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-                              >
-                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 4 }}>
-                                  <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category, m.customizer.type)}</Text>
-                                  <Text style={[styles.dropdownSelectText, { color: colors.text }]} numberOfLines={1}>
-                                    {typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category}
-                                  </Text>
-                                </View>
-                                <ChevronDownIcon color={colors.subText} size={10} />
-                              </TouchableOpacity>
-
-                              {activeDropdown === `${m.id}_cat` && (
-                                <View style={[styles.dropdownCard, styles.categoryDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                                  <ScrollView nestedScrollEnabled style={{ maxHeight: 120 }}>
-                                    {CATEGORIES.map(c => (
-                                      <TouchableOpacity
-                                        key={c}
-                                        onPress={() => {
-                                          handleUpdateField(m.id, 'category', c);
-                                          setActiveDropdown(null);
-                                        }}
-                                        style={styles.dropdownCardItem}
-                                      >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                          <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(c, m.customizer?.type)}</Text>
-                                          <Text style={[styles.dropdownCardText, { color: colors.text }]} numberOfLines={1}>{c}</Text>
-                                        </View>
-                                        {m.customizer?.category === c && <CheckIcon color="#10b981" size={10} />}
-                                      </TouchableOpacity>
-                                    ))}
-                                  </ScrollView>
-                                </View>
-                              )}
-                            </View>
+                             <View style={[styles.flex1, { marginLeft: 8 }]}>
+                               <Text style={[styles.fieldLabel, { color: colors.subText }]}>Category</Text>
+                               <TouchableOpacity
+                                 onPress={() => {
+                                   setActiveMessageIdForCategory(m.id);
+                                   setCategorySheetVisible(true);
+                                 }}
+                                 style={[styles.dropdownSelectBox, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                               >
+                                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 4 }}>
+                                   <Text style={{ fontSize: 10, marginRight: 4 }}>{getCategoryEmoji(typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category, m.customizer.type)}</Text>
+                                   <Text style={[styles.dropdownSelectText, { color: colors.text }]} numberOfLines={1}>
+                                     {typeof m.customizer.category === 'object' ? m.customizer.category.name : m.customizer.category}
+                                   </Text>
+                                 </View>
+                                 <ChevronDownIcon color={colors.subText} size={10} />
+                               </TouchableOpacity>
+                             </View>
                           </View>
 
                           {/* Tags Section */}
@@ -1561,9 +1552,76 @@ export const ChatScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* MODULAR BOTTOM TAB BAR (inline footer to avoid absolute overlap) */}
-        {!keyboardVisible && <BottomTabBar inline activeTab="Chat" />}
+        {/* MODULAR BOTTOM TAB BAR (inline footer) */}
+        <BottomTabBar activeTab="Chat" />
 
+      {/* Category Selection Modal Sheet */}
+      <Modal
+        visible={categorySheetVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setCategorySheetVisible(false);
+          setActiveMessageIdForCategory(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: colors.card, borderTopColor: colors.border, borderWidth: 1 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>SELECT CATEGORY</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setCategorySheetVisible(false);
+                  setActiveMessageIdForCategory(null);
+                }}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={[styles.modalCloseText, { color: colors.subText }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <View style={styles.gridContainer}>
+                {CATEGORIES.map(c => {
+                  const activeMsg = activeMessageIdForCategory 
+                    ? messages.find(msg => msg.id === activeMessageIdForCategory) 
+                    : null;
+                  const type = activeMsg?.customizer?.type || 'Expense';
+                  const emoji = getCategoryEmoji(c, type);
+                  const currentCategory = activeMsg?.customizer?.category;
+                  const currentCategoryName = typeof currentCategory === 'object' ? currentCategory.name : currentCategory;
+                  const isSelected = currentCategoryName === c;
+
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => {
+                        if (activeMessageIdForCategory) {
+                          handleUpdateField(activeMessageIdForCategory, 'category', c);
+                        }
+                        setCategorySheetVisible(false);
+                        setActiveMessageIdForCategory(null);
+                      }}
+                      style={[
+                        styles.categoryTile,
+                        isSelected && { borderColor: '#10b981', borderWidth: 1.5 },
+                        { backgroundColor: colors.inputBackground }
+                      ]}
+                    >
+                      <View style={[styles.categoryIconCircle, { backgroundColor: colors.background }]}>
+                        <Text style={{ fontSize: 16 }}>{emoji}</Text>
+                      </View>
+                      <Text style={[styles.categoryTileText, { color: colors.text }]} numberOfLines={1}>
+                        {c}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
        </KeyboardAvoidingView>
        </View>
      </ScreenWrapper>
@@ -1585,7 +1643,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
     paddingBottom: 12,
     backgroundColor: '#183235',
     borderBottomWidth: 1,
@@ -2328,5 +2386,63 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(9, 9, 11, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  categoryTile: {
+    width: '22%',
+    aspectRatio: 0.85,
+    alignItems: 'center',
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    padding: 4,
+  },
+  categoryIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  categoryTileText: {
+    fontSize: 8,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 });

@@ -335,17 +335,6 @@ export const ProfileScreen: React.FC = () => {
             <Text style={[styles.headerTitle, { color: colors.text }]}>PORTFOLIO CENTER</Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            {/* Combined Mode Toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <Text style={{ fontSize: 9, color: colors.subText, fontWeight: '700' }}>👑</Text>
-              <Switch
-                value={combinedFeatures}
-                onValueChange={handleCombinedFeaturesToggle}
-                trackColor={{ false: '#71717a', true: '#2fb09b' }}
-                thumbColor={combinedFeatures ? '#ffffff' : '#f4f4f5'}
-              />
-            </View>
-
             {/* Theme Toggle */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
               <Text style={{ fontSize: 9, color: colors.subText, fontWeight: '700' }}>🌙</Text>
@@ -354,17 +343,6 @@ export const ProfileScreen: React.FC = () => {
                 onValueChange={toggleTheme}
                 trackColor={{ false: '#71717a', true: '#6366f1' }}
                 thumbColor={isDark ? '#ffffff' : '#f4f4f5'}
-              />
-            </View>
-
-            {/* Admin Toggle */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <Text style={{ fontSize: 9, color: colors.subText, fontWeight: '700' }}>🔓</Text>
-              <Switch
-                value={isAdmin}
-                onValueChange={handleAdminToggle}
-                trackColor={{ false: '#71717a', true: '#ef4444' }}
-                thumbColor={isAdmin ? '#ffffff' : '#f4f4f5'}
               />
             </View>
           </View>
@@ -876,7 +854,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
@@ -925,7 +903,7 @@ const styles = StyleSheet.create({
   scrollContainer: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 130,
+    paddingBottom: 80,
   },
   userCard: {
     borderWidth: 1,

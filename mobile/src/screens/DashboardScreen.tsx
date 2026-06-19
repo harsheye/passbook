@@ -23,7 +23,7 @@ import { BottomTabBar } from '../components/BottomTabBar';
 import { SparklesIcon } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 import { useTab } from '../context/TabContext';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import { LineChart } from 'react-native-chart-kit';
 import LottieView from 'lottie-react-native';
 
@@ -161,6 +161,7 @@ export const DashboardScreen: React.FC = () => {
 
   // New customization & modal states
   const [yearDropdownOpen, setYearDropdownOpen] = useState<boolean>(false);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState<boolean>(false);
   const [reportModalVisible, setReportModalVisible] = useState<boolean>(false);
   const [taxModalVisible, setTaxModalVisible] = useState<boolean>(false);
   const [downloadingPdf, setDownloadingPdf] = useState<boolean>(false);
@@ -182,48 +183,49 @@ export const DashboardScreen: React.FC = () => {
     const type = (t.transactionType || '').toUpperCase();
     if (type === 'INCOME') {
       displayIncome += t.amount;
-    } else if (type === 'EXPENSE') {
+    } else if (type === 'EXPENSE' || type === 'GAMBLING') {
       displayExpense += t.amount;
     }
   });
+
+  // Fixed mini-chart values for Consolidated Net Worth card (stable UI)
+  const miniValues = [displayIncome || 0, Math.abs(displayExpense) || 0, Math.abs(displayIncome - displayExpense) || 0];
+  const miniMax = Math.max(...miniValues, 1);
+  const miniHeights = miniValues.map(v => (v / miniMax) * 80); // up to 80px height
 
   const userProfession = selectedDashboardProf || profile?.profession || 'Salaried';
 
   const renderBusinessDashboard = () => {
 
-    // Calculate monthly cumulative balance (12 months)
-    const monthlyNet = Array(12).fill(0);
+    // Calculate monthly spending (12 months)
+    const monthlySpent = Array(12).fill(0);
     yearlyTxns.forEach(t => {
       const txDate = t.transactionDate || (t as any).date;
       if (!txDate) return;
       const d = new Date(txDate);
       const m = d.getMonth(); // 0-11
       const type = (t.transactionType || '').toUpperCase();
-      if (type === 'INCOME') {
-        monthlyNet[m] += t.amount;
-      } else if (type === 'EXPENSE') {
-        monthlyNet[m] -= t.amount;
+      if (type === 'EXPENSE' || type === 'GAMBLING') {
+        monthlySpent[m] += Math.abs(t.amount);
       }
     });
 
-    let cumulative = 0;
-    const monthlyCumulative = monthlyNet.map(net => {
-      cumulative += net;
-      return cumulative;
-    });
-
-    const maxVal = Math.max(...monthlyCumulative);
-    const minVal = Math.min(...monthlyCumulative);
+    const maxVal = Math.max(...monthlySpent);
+    const minVal = Math.min(...monthlySpent);
     const range = maxVal - minVal;
 
     // Svg configuration
     const x_coords = [35, 85, 135, 185, 235, 285, 335, 385, 435, 485, 535, 585];
-    const pts = monthlyCumulative.map((val, idx) => {
+    const pts = monthlySpent.map((val, idx) => {
       const x = x_coords[idx];
       // Map to Y height 30 to 100
       const y = range === 0 ? 60 : 100 - ((val - minVal) / range) * 70;
       return { x, y, val };
     });
+
+    const isNegativeNet = Math.abs(displayExpense) > displayIncome;
+    const chartColor = isNegativeNet ? '#ef4444' : '#22c55e';
+    const areaFillColor = isNegativeNet ? 'rgba(239, 68, 68, 0.06)' : 'rgba(34, 197, 94, 0.06)';
 
     let pathD = '';
     let areaD = '';
@@ -296,59 +298,11 @@ export const DashboardScreen: React.FC = () => {
 
     return (
       <View style={{ gap: 16 }}>
-        {/* SALES IN THE LAST WEEK (BAR CHART) */}
-        <View style={[styles.customCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.customCardHeader}>
-            <Text style={[styles.customCardTitle, { color: colors.text }]}>{salesTitle}</Text>
-            <Text style={[styles.moreIcon, { color: colors.subText }]}>•••</Text>
-          </View>
-          <Text style={[styles.percentageText, { color: colors.text }]}>{isFarmer ? 'Crops sold 4-6 months apart' : '+3.15%'}</Text>
-
-          <View style={styles.barChartContainer}>
-            <View style={styles.yAxisContainer}>
-              {[5000, 4000, 3000, 2000, 1000].map(y => (
-                <View key={y} style={styles.gridLineRow}>
-                  <Text style={[styles.yAxisText, { color: colors.subText }]}>{isFarmer ? `${y * 10}` : `${y}`}</Text>
-                  <View style={[styles.gridLine, { backgroundColor: colors.border }]} />
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.barsRow}>
-              {barData.map((bar, idx) => (
-                <View key={idx} style={styles.barItem}>
-                  <View style={[styles.barTrack, { backgroundColor: isDark ? '#27272a' : '#f4f4f5' }]}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        {
-                          height: `${bar.val}%`,
-                          backgroundColor: bar.color,
-                          borderTopLeftRadius: 6,
-                          borderTopRightRadius: 6,
-                          borderBottomLeftRadius: 6,
-                          borderBottomRightRadius: 6
-                        }
-                      ]}
-                    />
-                  </View>
-                  <Text style={[styles.barLabelText, { color: colors.subText }]}>{bar.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {!isFarmer && (
-            <View style={[styles.scrollIndicatorBg, { backgroundColor: isDark ? '#27272a' : '#e4e4e7' }]}>
-              <View style={[styles.scrollIndicatorFill, { backgroundColor: '#a1a1aa', width: '40%' }]} />
-            </View>
-          )}
-        </View>
 
         {/* CASH AT THE END OF THE MONTH (LINE CHART) */}
         <View style={[styles.customCard, { backgroundColor: colors.card, borderColor: colors.border, zIndex: 60 }]}>
           <View style={styles.customCardHeader}>
-            <Text style={[styles.customCardTitle, { color: colors.text }]}>{cashTitle}</Text>
+            <Text style={[styles.customCardTitle, { color: colors.text }]}>Analysis</Text>
             <TouchableOpacity
               onPress={() => setYearDropdownOpen(!yearDropdownOpen)}
               style={styles.yearDropdown}
@@ -403,7 +357,7 @@ export const DashboardScreen: React.FC = () => {
                   {areaD ? (
                     <Path
                       d={areaD}
-                      fill="rgba(34,197,94,0.06)"
+                      fill={areaFillColor}
                     />
                   ) : null}
 
@@ -412,7 +366,7 @@ export const DashboardScreen: React.FC = () => {
                     <Path
                       d={pathD}
                       fill="none"
-                      stroke="#22c55e"
+                      stroke={chartColor}
                       strokeWidth="2.5"
                     />
                   ) : null}
@@ -420,7 +374,7 @@ export const DashboardScreen: React.FC = () => {
                   {/* Circles and tooltip texts */}
                   {pts.map((pt, i) => (
                     <G key={i}>
-                      <Circle cx={pt.x} cy={pt.y} r="4" fill="#22c55e" />
+                      <Circle cx={pt.x} cy={pt.y} r="4" fill={chartColor} />
                       <Circle cx={pt.x} cy={pt.y} r="2.2" fill="#ffffff" />
                       <SvgText x={pt.x} y={pt.y - 8} fill={colors.text} fontSize="7" fontWeight="bold" textAnchor="middle">
                         ₹{Math.round(pt.val).toLocaleString('en-IN')}
@@ -456,142 +410,59 @@ export const DashboardScreen: React.FC = () => {
           </View>
 
           <View style={styles.lineLegendRow}>
-            <View style={styles.legendLineIcon} />
+            <View style={[styles.legendLineIcon, { backgroundColor: chartColor }]} />
             <Text style={{ fontSize: 8.5, color: colors.subText, fontWeight: '700', textTransform: 'uppercase' }}>
-              Cash at the end of the month
+              Monthly Spending
             </Text>
           </View>
         </View>
 
-        {/* TRANSACTION RATIO (DONUT CHART) */}
+        {/* CATEGORY SPENDING (DONUT CHART) */}
         {ratioCardVisible && (
-          <View style={[styles.customCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.customCard, { backgroundColor: colors.card, borderColor: colors.border, zIndex: 50 }]}>
             <View style={styles.customCardHeader}>
-              <Text style={[styles.customCardTitle, { color: colors.text }]}>Transaction Ratio ({selectedYear})</Text>
-              <TouchableOpacity onPress={() => setRatioCardVisible(false)}>
-                <Text style={{ fontSize: 11, color: colors.subText, fontWeight: '800' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ alignItems: 'center', justifyContent: 'center', marginVertical: 16 }}>
-              <Svg width={140} height={140} viewBox="0 0 100 100" style={{ alignSelf: 'center' }}>
-                <G transform="rotate(-90 50 50)">
-                  {totalAmt === 0 ? (
-                    <Circle
-                      cx="50"
-                      cy="50"
-                      r={radius}
-                      fill="transparent"
-                      stroke="#4b5563"
-                      strokeWidth={strokeWidth}
-                    />
-                  ) : (
-                    <>
-                      <Circle
-                        cx="50"
-                        cy="50"
-                        r={radius}
-                        fill="transparent"
-                        stroke="#5c7cfa"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={circumference}
-                        strokeDashoffset={incomeOffset}
-                        strokeLinecap="round"
-                      />
-                      <Circle
-                        cx="50"
-                        cy="50"
-                        r={radius}
-                        fill="transparent"
-                        stroke="#e05e5e"
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={circumference}
-                        strokeDashoffset={expenseOffset}
-                        transform={`rotate(${incomePct * 360} 50 50)`}
-                        strokeLinecap="round"
-                      />
-                    </>
-                  )}
-                </G>
-              </Svg>
-              
-              <View style={{ position: 'absolute', alignItems: 'center' }}>
-                <Text style={{ fontSize: 8, color: colors.subText, fontWeight: '800' }}>TOTAL</Text>
-                <Text style={{ fontSize: 12, color: colors.text, fontWeight: '900' }}>
-                  ₹{totalAmt.toLocaleString('en-IN')}
-                </Text>
+              <Text style={[styles.customCardTitle, { color: colors.text }]}>Category Spending ({selectedYear})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                  style={styles.yearDropdown}
+                >
+                  <Text style={{ color: '#6366f1', fontSize: 11, fontWeight: '900' }}>
+                    {selectedCategory === 'All' ? 'Exclude: None' : `Exclude: ${selectedCategory}`} ▼
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setRatioCardVisible(false)}>
+                  <Text style={{ fontSize: 11, color: colors.subText, fontWeight: '800' }}>✕</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 4 }}>
-              <View style={{ alignItems: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.legendIndicatorDot, { backgroundColor: '#5c7cfa' }]} />
-                  <Text style={[styles.ratioLegendLabel, { color: colors.subText }]}>Income</Text>
-                </View>
-                <Text style={[styles.ratioLegendValue, { color: colors.text, fontSize: 11, marginTop: 2 }]}>
-                  ₹{displayIncome.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({totalAmt > 0 ? Math.round(incomePct * 100) : 0}%)
-                </Text>
+            {categoryDropdownOpen && (
+              <View style={[styles.yearDropdownList, { backgroundColor: colors.card, borderColor: colors.border, right: 16, top: 36, width: 140 }]}>
+                {['All', ...Object.keys(CATEGORY_ICONS)].map(cat => (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => {
+                      setSelectedCategory(cat);
+                      setCategoryDropdownOpen(false);
+                    }}
+                    style={[
+                      styles.yearDropdownItem,
+                      cat === selectedCategory && { backgroundColor: 'rgba(99, 102, 241, 0.15)' }
+                    ]}
+                  >
+                    <Text style={{ color: cat === selectedCategory ? '#6366f1' : colors.text, fontSize: 10, fontWeight: 'bold' }}>
+                      {cat === 'All' ? 'Exclude: None' : cat}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
+            )}
 
-              <View style={{ alignItems: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.legendIndicatorDot, { backgroundColor: '#e05e5e' }]} />
-                  <Text style={[styles.ratioLegendLabel, { color: colors.subText }]}>Expenses</Text>
-                </View>
-                <Text style={[styles.ratioLegendValue, { color: colors.text, fontSize: 11, marginTop: 2 }]}>
-                  ₹{displayExpense.toLocaleString('en-IN', { minimumFractionDigits: 2 })} ({totalAmt > 0 ? Math.round(expensePct * 100) : 0}%)
-                </Text>
-              </View>
-            </View>
+            {data ? renderPieChart(getFilteredChartData()) : null}
           </View>
         )}
 
-        {/* REPORTS & TAX CARDS SPLIT SECTION (HORIZONTALLY SCROLLABLE BARS) */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginTop: 12, marginBottom: 20 }}
-          contentContainerStyle={{ gap: 12, paddingBottom: 8 }}
-        >
-          <View style={[styles.splitCard, { backgroundColor: colors.card, borderColor: colors.border, width: 260 }]}>
-            <Text style={[styles.splitCardTitle, { color: colors.text }]}>Reports for Last Month</Text>
-            <Text style={[styles.splitCardSub, { color: colors.subText }]}>From 01 May - 31 May</Text>
-            <View style={styles.splitActions}>
-              <TouchableOpacity
-                onPress={() => handleDownloadPdf('report')}
-                style={[styles.splitBtn, { backgroundColor: '#f43f5e' }]}
-              >
-                <Text style={styles.splitBtnText}>Download PDF</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setReportModalVisible(true)}
-                style={styles.splitViewTextBtn}
-              >
-                <Text style={[styles.splitViewText, { color: '#f43f5e' }]}>View</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={[styles.splitCard, { backgroundColor: colors.card, borderColor: colors.border, width: 260 }]}>
-            <Text style={[styles.splitCardTitle, { color: colors.text }]}>Tax & Deductions</Text>
-            <Text style={[styles.splitCardSub, { color: colors.subText }]}>{taxSubtitle}</Text>
-            <View style={styles.splitActions}>
-              <TouchableOpacity
-                onPress={() => handleDownloadPdf('tax')}
-                style={[styles.splitBtn, { backgroundColor: '#3b82f6' }]}
-              >
-                <Text style={styles.splitBtnText}>Download PDF</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setTaxModalVisible(true)}
-                style={styles.splitViewTextBtn}
-              >
-                <Text style={[styles.splitViewText, { color: '#3b82f6' }]}>View</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
       </View>
     );
   };
@@ -831,7 +702,7 @@ export const DashboardScreen: React.FC = () => {
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
             {/* TOP BAR BRANDING HEADER (SCROLLABLE WITH THE PAGE) */}
-            <View style={[styles.header, { borderBottomColor: colors.border, paddingHorizontal: 0, borderBottomWidth: 0, paddingBottom: 8, paddingTop: 28 }]}>
+            <View style={[styles.header, { borderBottomColor: colors.border, paddingHorizontal: 0, borderBottomWidth: 0, paddingBottom: 8, paddingTop: 24 }]}>
               <View>
                 <Text style={[styles.brandSub, { color: colors.subText }]}>
                   {profile ? `Welcome back, ${profile.name} (${profile.profession})` : 'Smart Finance companion'}
@@ -840,75 +711,27 @@ export const DashboardScreen: React.FC = () => {
               </View>
             </View>
 
-            {combinedFeatures && (
-              <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 9, fontWeight: '900', color: '#10b981', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>👑 Combined Mode Swapper</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
-                  {['Salaried', 'Farmer', 'Business', 'Freelancer', 'Student', 'Housewife'].map(prof => {
-                    const isSelected = userProfession === prof;
-                    return (
-                      <TouchableOpacity
-                        key={prof}
-                        onPress={() => setSelectedDashboardProf(prof)}
-                        style={{
-                          backgroundColor: isSelected ? '#10b981' : colors.card,
-                          borderColor: isSelected ? '#10b981' : colors.border,
-                          borderWidth: 1,
-                          borderRadius: 10,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          justifyContent: 'center',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <Text style={{ color: isSelected ? '#000000' : colors.text, fontSize: 10, fontWeight: 'bold' }}>{prof}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
 
             {/* CONSOLIDATED NET WORTH CARD */}
-            <LinearGradient colors={['#06b6d4', '#10b981']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.netWorthCard, { borderColor: colors.border }] }>
+            <LinearGradient colors={['#06b6d4', '#10b981']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.netWorthCard, { borderColor: colors.border, paddingVertical: 12 }] }>
               <Text style={[styles.netWorthLabel, { color: '#ffffff' }]}>CONSOLIDATED NET WORTH</Text>
               <Text style={[styles.netWorthVal, { color: '#ffffff' }]}>
                 ₹{((data?.summary.totalIncome || 0) - (data?.summary.totalExpenses || 0)).toLocaleString('en-IN')}
               </Text>
-              <View style={styles.netWorthRow}>
+              <View style={[styles.netWorthRow, { marginTop: 6 }] }>
                 <View style={styles.netWorthCol}>
                   <Text style={[styles.netWorthColLabel, { color: 'rgba(255,255,255,0.9)' }]}>TOTAL INFLOWS</Text>
                   <Text style={[styles.netWorthColAmt, { color: '#d1fae5' }]}>
                     ₹{(data?.summary.totalIncome || 0).toLocaleString('en-IN')}
                   </Text>
                 </View>
-                <View style={[styles.netWorthDivider, { backgroundColor: 'rgba(255,255,255,0.3)' }]} />
-                <View style={styles.netWorthCol}>
-                  <Text style={[styles.netWorthColLabel, { color: 'rgba(255,255,255,0.9)' }]}>TOTAL OUTFLOWS</Text>
-                  <Text style={[styles.netWorthColAmt, { color: '#fecaca' }]}>
-                    ₹{(data?.summary.totalExpenses || 0).toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Small sparkline chart using react-native-chart-kit */}
-              <View style={{ marginTop: 12 }}>
-                <LineChart
-                  data={{
-                    labels: ['Inflows', 'Outflows', 'Net'],
-                    datasets: [{ data: [displayIncome || 0, Math.abs(displayExpense) || 0, (displayIncome - Math.abs(displayExpense)) || 0] }]
-                  }}
-                  width={Dimensions.get('window').width - 64}
-                  height={120}
-                  chartConfig={chartConfig}
-                  withDots={false}
-                  withInnerLines={false}
-                  withOuterLines={false}
-                  withShadow={false}
-                  bezier
-                  style={{ borderRadius: 16 }}
-                />
-              </View>
+                 <View style={styles.netWorthCol}>
+                   <Text style={[styles.netWorthColLabel, { color: 'rgba(255,255,255,0.9)' }]}>TOTAL OUTFLOWS</Text>
+                   <Text style={[styles.netWorthColAmt, { color: '#fecaca' }]}>
+                     ₹{(data?.summary.totalExpenses || 0).toLocaleString('en-IN')}
+                   </Text>
+                 </View>
+               </View>
             </LinearGradient>
 
             {/* FINANCIAL HUB SHORTCUTS */}
@@ -1010,25 +833,6 @@ export const DashboardScreen: React.FC = () => {
               )}
             </View>
 
-            {/* METRICS ROW (AI INSIGHTS AS WELL) */}
-             {hasData && data && (
-              <View style={[styles.insightsCard, { borderColor: colors.border }]}>
-                <View style={styles.insightsHeader}>
-                  {sparkleAnim ? (
-                    <LottieView source={sparkleAnim} autoPlay loop style={{ width: 22, height: 22 }} />
-                  ) : (
-                    <SparklesIcon color="#2fb09b" size={14} />
-                  )}
-                  <Text style={styles.insightsTitle}>LEDGER INTELLIGENCE</Text>
-                </View>
-                 {data.insights.map((insight, idx) => (
-                   <View key={idx} style={styles.insightItem}>
-                     <Text style={styles.insightBullet}>•</Text>
-                     <Text style={styles.insightText}>{insight}</Text>
-                   </View>
-                 ))}
-               </View>
-             )}
 
           </ScrollView>
         )}
@@ -1179,7 +983,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
   },
@@ -1208,7 +1012,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 130,
+    paddingBottom: 80,
   },
   netWorthCard: {
     borderRadius: 24,
@@ -1231,7 +1035,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    marginTop: 16,
+    marginTop: 6,
     paddingTop: 16,
     borderTopWidth: 1,
   },

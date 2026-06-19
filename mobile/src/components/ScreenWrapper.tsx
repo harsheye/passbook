@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, KeyboardAvoidingView, Platform, ScrollView, TouchableWithoutFeedback, Keyboard, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface ScreenWrapperProps {
@@ -12,27 +12,53 @@ interface ScreenWrapperProps {
 export const ScreenWrapper: React.FC<ScreenWrapperProps> = ({ children, scroll = false, contentContainerStyle, style }) => {
   const insets = useSafeAreaInsets();
 
+  // Slightly reduce top inset so custom header sits a bit higher, and keep bottom inset minimal for consistent footer placement
+  const topInset = Math.max(0, (insets.top || 0) - 12);
+  const bottomInset = 0;
+
   const WrapperContent = (
-    <View style={[{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: 0, paddingRight: 0 }, style]}>
+    <View style={[styles.inner, style]}>
       {children}
     </View>
   );
 
   if (scroll) {
     return (
-      <SafeAreaView style={{ flex: 1 }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
-          <ScrollView contentContainerStyle={[{ flexGrow: 1 }, contentContainerStyle]}>{WrapperContent}</ScrollView>
+      <View style={[styles.container, { paddingTop: topInset, paddingBottom: bottomInset }]}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <ScrollView contentContainerStyle={[styles.scrollContent, contentContainerStyle]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {WrapperContent}
+            </ScrollView>
+          </TouchableWithoutFeedback>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
-        {WrapperContent}
+    <View style={[styles.container, { paddingTop: topInset, paddingBottom: bottomInset }]}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          {WrapperContent}
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
+  inner: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+});
+

@@ -42,7 +42,7 @@ import {
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 
-const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY'];
+const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
 const SCHEDULE_CATEGORIES = [
   'Subscriptions',
   'Rent',
@@ -544,7 +544,7 @@ export const SchedulesScreen: React.FC = () => {
                     </View>
 
                     {isDue ? (
-                      <View style={[styles.pendingContainer, { borderTopColor: colors.border, marginTop: 12 }]}>
+                      <View style={[styles.pendingContainer, { borderTopColor: colors.border, marginTop: 12, paddingHorizontal: 12, paddingBottom: 12 }]}>
                         <View style={styles.pendingIndicator}>
                           <View style={styles.pulseDot} />
                           <Text style={[styles.pendingText, { color: colors.subText }]}>Pending Approval</Text>
@@ -906,40 +906,33 @@ export const SchedulesScreen: React.FC = () => {
                   </View>
 
                   {/* Category select row */}
-                  <View style={{ marginBottom: 12 }}>
+                  <View style={[styles.formGroup, { zIndex: 110 }]}>
                     <Text style={styles.formLabel}>Category</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={{ marginTop: 6 }}
-                      contentContainerStyle={{ paddingVertical: 4 }}
-                      nestedScrollEnabled
+                    <TouchableOpacity
+                      onPress={() => setCatDropdownOpen(!catDropdownOpen)}
+                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                     >
-                      {SCHEDULE_CATEGORIES.map(c => {
-                        const isSelected = category === c;
-                        return (
-                          <TouchableOpacity
-                            key={c}
-                            onPress={() => setCategory(c)}
-                            style={[
-                              {
-                                backgroundColor: isSelected ? '#6366f1' : colors.inputBackground,
-                                borderColor: isSelected ? '#6366f1' : colors.border,
-                                borderWidth: 1,
-                                borderRadius: 12,
-                                paddingHorizontal: 12,
-                                paddingVertical: 8,
-                                marginRight: 6,
-                              }
-                            ]}
-                          >
-                            <Text style={{ color: isSelected ? '#ffffff' : colors.text, fontSize: 11, fontWeight: '700' }}>
-                              {c}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>{category || 'Select Category'}</Text>
+                      <ChevronDownIcon color={colors.subText} size={12} />
+                    </TouchableOpacity>
+                    {catDropdownOpen ? (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border, zIndex: 120 }]}>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {SCHEDULE_CATEGORIES.map(c => (
+                            <TouchableOpacity
+                              key={c}
+                              onPress={() => {
+                                setCategory(c);
+                                setCatDropdownOpen(false);
+                              }}
+                              style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                            >
+                              <Text style={[styles.modalMenuText, { color: colors.text }]}>{c}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Account select row */}
@@ -977,7 +970,7 @@ export const SchedulesScreen: React.FC = () => {
                   </View>
 
                   {/* Payment Method */}
-                  <View style={styles.formGroup}>
+                  <View style={[styles.formGroup, pmDropdownOpen ? { zIndex: 100 } : null]}>
                     <Text style={styles.formLabel}>Payment Method</Text>
                     <TouchableOpacity
                       onPress={() => setPmDropdownOpen(!pmDropdownOpen)}
@@ -1085,7 +1078,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingTop: Platform.OS === 'android' ? 48 : 36,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
     paddingBottom: 8,
     paddingHorizontal: 16,
   },
@@ -1176,7 +1169,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 130,
+    paddingBottom: 80,
   },
   card: {
     backgroundColor: '#18181b',
@@ -1286,42 +1279,42 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#d97706',
   },
   pendingText: {
-    fontSize: 8,
+    fontSize: 10,
     fontWeight: '800',
     color: '#d97706',
     textTransform: 'uppercase',
   },
   pendingActionRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   skipBtn: {
     backgroundColor: '#27272a',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   skipBtnText: {
-    fontSize: 8,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
     color: '#a1a1aa',
     textTransform: 'uppercase',
   },
   approveBtn: {
     backgroundColor: '#10b981',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   approveBtnText: {
-    fontSize: 8,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
     color: '#000000',
     textTransform: 'uppercase',
   },
@@ -1549,15 +1542,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalMenu: {
-    position: 'absolute',
-    top: 48,
-    left: 0,
     width: '100%',
     backgroundColor: '#18181b',
     borderWidth: 1,
     borderColor: '#27272a',
     borderRadius: 10,
-    zIndex: 100,
+    marginTop: 4,
   },
   modalMenuItem: {
     paddingHorizontal: 12,

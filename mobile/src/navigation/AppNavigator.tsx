@@ -14,7 +14,6 @@ import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { GstScreen } from '../screens/GstScreen';
 import { TaxScreen } from '../screens/TaxScreen';
 import { useTheme } from '../context/ThemeContext';
-import { ScreenWrapper } from '../components/ScreenWrapper';
 
 const Stack = createStackNavigator();
 
@@ -43,26 +42,27 @@ export const AppNavigator: React.FC = () => {
   }
 
   return (
-    <ScreenWrapper>
-      <Stack.Navigator
-        initialRouteName={initialRoute}
-        screenOptions={{
-          headerShown: false,
-          cardStyle: { backgroundColor: colors.background },
-        }}
-      >
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        <Stack.Screen name="MainTab" component={MainTabScreen} />
-        <Stack.Screen name="Chat" component={ChatScreen} />
-        <Stack.Screen name="Dashboard" component={DashboardScreen} />
-        <Stack.Screen name="AddTransaction" component={AddTransactionScreen} />
-        <Stack.Screen name="Hub" component={HubScreen} />
-        <Stack.Screen name="Transactions" component={TransactionsScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="Schedules" component={SchedulesScreen} />
-        <Stack.Screen name="Gst" component={GstScreen} />
-        <Stack.Screen name="Tax" component={TaxScreen} />
-      </Stack.Navigator>
-    </ScreenWrapper>
+    <Stack.Navigator
+      initialRouteName={initialRoute}
+      screenOptions={{
+        headerShown: false,
+        cardStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      <Stack.Screen name="MainTab" component={MainTabScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      <Stack.Screen name="AddTransaction" component={AddTransactionScreen} />
+      <Stack.Screen name="Hub" component={HubScreen} />
+      <Stack.Screen name="Transactions" component={TransactionsScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Schedules" component={SchedulesScreen} />
+      <Stack.Screen name="Gst" component={GstScreen} />
+      <Stack.Screen name="Tax" component={TaxScreen} />
+    </Stack.Navigator>
   );
 };
+
+export { Stack };
+

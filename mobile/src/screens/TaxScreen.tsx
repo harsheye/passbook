@@ -335,9 +335,9 @@ export const TaxScreen: React.FC = () => {
           <View style={styles.inputRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.fieldLabel, { color: colors.subText }]}>Annual Gross Income (₹)</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+              <View style={[styles.inputWrapperLarge, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                 <TextInput
-                  style={[styles.textInput, { color: colors.text }]}
+                  style={[styles.textInputLarge, { color: colors.text }]}
                   keyboardType="numeric"
                   value={grossIncomeStr}
                   onChangeText={setGrossIncomeStr}
@@ -347,9 +347,9 @@ export const TaxScreen: React.FC = () => {
 
             <View style={{ flex: 1 }}>
               <Text style={[styles.fieldLabel, { color: colors.subText }]}>Other/Investment Income (₹)</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+              <View style={[styles.inputWrapperLarge, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
                 <TextInput
-                  style={[styles.textInput, { color: colors.text }]}
+                  style={[styles.textInputLarge, { color: colors.text }]}
                   keyboardType="numeric"
                   value={otherIncomeStr}
                   onChangeText={setOtherIncomeStr}
@@ -365,6 +365,16 @@ export const TaxScreen: React.FC = () => {
               </Text>
             </View>
           )}
+
+          <View style={{ marginTop: 12, flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity onPress={handleExportTaxReport} style={[styles.primaryBtn, { backgroundColor: '#6366f1' }]}> 
+              <Text style={styles.primaryBtnText}>Export Tax Report</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => Alert.alert('Save & Continue', 'Checklist saved for future reference.')} style={[styles.secondaryBtn]}> 
+              <Text style={styles.secondaryBtnText}>Save Checklist</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* REGIME SIDE-BY-SIDE CARDS */}
@@ -422,12 +432,6 @@ export const TaxScreen: React.FC = () => {
             <Text style={{ color: colors.text, fontWeight: '700', marginTop: 10 }}>• Review medical insurance (80D)</Text>
             <Text style={{ color: colors.subText, marginTop: 6 }}>Increase health cover for family or parents before year-end to claim higher 80D deductions.</Text>
           </View>
-        </View>
-
-        <View style={{ marginTop: 12, paddingHorizontal: 16 }}>
-          <TouchableOpacity onPress={handleExportTaxReport} style={{ backgroundColor: '#6366f1', padding: 12, borderRadius: 10, alignItems: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>Export Tax Report (PDF)</Text>
-          </TouchableOpacity>
         </View>
 
         {/* SLAB BREAKDOWNS CARD */}
@@ -624,13 +628,14 @@ export const TaxScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 24 : 0,
+    paddingTop: 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: Platform.OS === 'android' ? 8 : 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
   },
   backBtn: {
@@ -691,10 +696,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 44,
   },
+  inputWrapperLarge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+  },
   textInput: {
     flex: 1,
     fontSize: 12,
     fontWeight: '700',
+  },
+  textInputLarge: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
   },
   stdDeductionBadge: {
     backgroundColor: 'rgba(99,102,241,0.08)',
@@ -981,5 +999,36 @@ const styles = StyleSheet.create({
   checkLimit: {
     fontSize: 9.5,
     fontWeight: '700',
+  },
+  // Buttons
+  primaryBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 14,
+    elevation: 3,
+  },
+  primaryBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  secondaryBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 14,
+  },
+  secondaryBtnText: {
+    color: '#374151',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });
