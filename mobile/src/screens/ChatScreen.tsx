@@ -118,7 +118,7 @@ const getCategoryEmoji = (category: string, type?: string) => {
 export const ChatScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
-  const { setActiveTab } = useTab();
+  const { setActiveTab, bumpTransactionTick } = useTab();
   const getFormattedTime = () => {
     const d = new Date();
     const h = String(d.getHours()).padStart(2, '0');
@@ -501,6 +501,8 @@ export const ChatScreen: React.FC = () => {
             setMessages(finalMsgs);
             saveHistory(finalMsgs);
             setLoading(false);
+            // notify other screens that new transactions may have been created
+            try { bumpTransactionTick(); } catch (e) { /* ignore */ }
             scrollToBottom();
           }, 300);
         } catch (err) {
@@ -826,6 +828,8 @@ export const ChatScreen: React.FC = () => {
       });
       setMessages(updated);
       saveHistory(updated);
+      // notify other screens that a transaction was created/updated
+      try { bumpTransactionTick(); } catch (e) { }
 
     } catch (err: any) {
       console.error(err);

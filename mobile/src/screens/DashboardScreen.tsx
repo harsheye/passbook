@@ -147,6 +147,7 @@ export const DashboardScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
   const { setActiveTab } = useTab();
+  const { transactionTick } = useTab();
 
   // States
   const [data, setData] = useState<DashboardSummaryData | null>(null);
@@ -504,6 +505,13 @@ export const DashboardScreen: React.FC = () => {
     }, [])
   );
 
+  // Re-load when external transaction tick updates (schedules approved, AI logs, etc.)
+  useEffect(() => {
+    if (transactionTick !== undefined) {
+      loadDashboardData();
+    }
+  }, [transactionTick]);
+
   // Filter transactions for recent history (stop filtering, return recent 4)
   const getFilteredTransactions = () => {
     return transactions.slice(0, 4); // Limit to top 4 recent transactions
@@ -586,7 +594,8 @@ export const DashboardScreen: React.FC = () => {
       return c === f || c.includes(f) || f.includes(c);
     };
 
-    return baseChartData.filter(item => !isMatch(item.name, selectedCategory));
+    // Focus mode: show only matching categories (modern, predictable behavior)
+    return baseChartData.filter(item => isMatch(item.name, selectedCategory));
   };
 
   // Helper to format date
@@ -655,6 +664,8 @@ export const DashboardScreen: React.FC = () => {
                     strokeDashoffset={strokeDashoffset}
                     transform={`rotate(${rotation} 60 60)`}
                     strokeLinecap="round"
+                    // make segments clickable: toggle focus on category
+                    onPress={() => setSelectedCategory(selectedCategory === item.name ? 'All' : item.name)}
                   />
                 );
               })}
@@ -662,23 +673,26 @@ export const DashboardScreen: React.FC = () => {
           </Svg>
           <View style={styles.donutCenterContent}>
             <Text style={[styles.donutCenterLabel, { color: colors.subText }]}>TOTAL</Text>
-            <Text style={[styles.donutCenterValue, { color: colors.text }]}>
-              ₹{totalSum.toLocaleString('en-IN')}
-            </Text>
+            <Text style={[styles.donutCenterValue, { color: colors.text }]}>₹{totalSum.toLocaleString('en-IN')}</Text>
           </View>
         </View>
 
-        {/* Legend */}
+        {/* Legend - clickable to focus category or reset */}
         <View style={styles.legendContainer}>
-          {chartData.slice(0, 4).map((item, idx) => {
+          {chartData.slice(0, 6).map((item, idx) => {
             const percent = Math.round((item.value / totalSum) * 100);
+            const isActive = selectedCategory === item.name;
             return (
-              <View key={item.name} style={styles.legendItem}>
+              <TouchableOpacity
+                key={item.name}
+                onPress={() => setSelectedCategory(isActive ? 'All' : item.name)}
+                style={[styles.legendItem, isActive ? { opacity: 1 } : { opacity: 0.85 }]}
+              >
                 <View style={[styles.legendDot, { backgroundColor: paletteColors[idx % paletteColors.length] }]} />
-                <Text style={[styles.legendText, { color: colors.subText }]} numberOfLines={1}>
+                <Text style={[styles.legendText, { color: isActive ? colors.text : colors.subText }]} numberOfLines={1}>
                   {item.name} ({percent}%)
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>

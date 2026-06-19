@@ -27,6 +27,7 @@ import {
   FilterIcon
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
+import { useTab } from '../context/TabContext';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -86,6 +87,7 @@ const FILTER_PAYMENT_METHODS = ['All', 'UPI', 'Card', 'Cash', 'Net Banking'];
 export const TransactionsScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
+  const { transactionTick } = useTab();
 
   // States
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -234,6 +236,13 @@ export const TransactionsScreen: React.FC = () => {
       loadData();
     }, [])
   );
+
+  // Also reload when external transaction tick increments (AI save, schedule approve, webhook)
+  useEffect(() => {
+    if (transactionTick !== undefined) {
+      loadData();
+    }
+  }, [transactionTick]);
 
   const handleTilePress = (txn: Transaction) => {
     // Navigate directly to AddTransaction (edit mode)

@@ -72,6 +72,7 @@ export const SchedulesScreen: React.FC = () => {
   const { isDark, colors } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
   const { triggerOpenSchedule } = useTab();
+  const { bumpTransactionTick } = useTab();
 
   // Swipe states
   const touchStartX = useRef(0);
@@ -231,6 +232,7 @@ export const SchedulesScreen: React.FC = () => {
       setModalOpen(false);
       resetForm();
       loadData();
+      try { bumpTransactionTick(); } catch (e) { }
     } catch (err) {
       showCustomAlert('Error', 'Failed to save schedule.');
     } finally {
@@ -272,6 +274,8 @@ export const SchedulesScreen: React.FC = () => {
       await approveOccurrenceApi(id);
       // refresh silently
       loadData();
+      // notify other screens that a new transaction was created via schedule approval
+      try { bumpTransactionTick(); } catch (e) { /* ignore */ }
     } catch (err) {
       showCustomAlert('Error', 'Failed to approve occurrence.');
     }
@@ -282,6 +286,8 @@ export const SchedulesScreen: React.FC = () => {
       await skipOccurrenceApi(id);
       // refresh silently
       loadData();
+      // notify other screens that schedule was skipped (UI should update)
+      try { bumpTransactionTick(); } catch (e) { /* ignore */ }
     } catch (err) {
       showCustomAlert('Error', 'Failed to skip occurrence.');
     }
@@ -689,6 +695,7 @@ export const SchedulesScreen: React.FC = () => {
                         setIdToDelete(null);
                         // refresh silently
                         loadData();
+                        try { bumpTransactionTick(); } catch (e) { }
                       } catch (err) {
                         showCustomAlert('Error', 'Failed to cancel schedule.');
                       }
