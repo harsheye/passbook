@@ -569,63 +569,109 @@ export const SchedulesScreen: React.FC = () => {
             No past payments recorded for this schedule.
           </Text>
         ) : (
-          <View style={{ gap: 6 }}>
-            {history.map((t, idx) => {
-              const payDate = new Date(t.transactionDate || (t as any).date).toLocaleDateString('en-IN', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric'
-              });
-              return (
-                <View
-                  key={t.id || idx}
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    backgroundColor: colors.inputBackground,
-                    borderRadius: 10,
-                    padding: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border
-                  }}
-                >
-                  <View style={{ gap: 2 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.text }}>
-                      {payDate}
-                    </Text>
-                    <Text style={{ fontSize: 7, fontWeight: '700', color: colors.subText, textTransform: 'uppercase' }}>
-                      {t.paymentMethod || 'Direct Debit'}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                    <Text style={{ fontSize: 9, fontWeight: '900', color: item.type === 'EXPENSE' ? '#f43f5e' : '#10b981' }}>
-                      ₹{Math.abs(t.amount).toLocaleString('en-IN')}
-                    </Text>
-                    {(() => {
-                      const isOverduePaid = t.note && t.note.includes('[Overdue]');
-                      return (
+          <View style={{ position: 'relative', paddingLeft: 4, marginTop: 4 }}>
+            {/* The vertical timeline connector line */}
+            <View style={{
+              position: 'absolute',
+              left: 11,
+              top: 20,
+              bottom: 20,
+              width: 2,
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(99, 102, 241, 0.15)'
+            }} />
+
+            <View style={{ gap: 12 }}>
+              {history.map((t, idx) => {
+                const payDate = new Date(t.transactionDate || (t as any).date).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric'
+                });
+                const isOverduePaid = t.note && t.note.includes('[Overdue]');
+                const statusColor = isOverduePaid ? '#ef4444' : '#10b981';
+
+                return (
+                  <View
+                    key={t.id || idx}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingLeft: 28,
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Timeline Dot (Double Ring) */}
+                    <View style={{
+                      position: 'absolute',
+                      left: 4,
+                      top: '50%',
+                      marginTop: -8,
+                      width: 16,
+                      height: 16,
+                      borderRadius: 8,
+                      backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 10
+                    }}>
+                      <View style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: 4,
+                        backgroundColor: statusColor,
+                      }} />
+                    </View>
+
+                    {/* Card container */}
+                    <View
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        backgroundColor: isDark ? '#27272a' : '#f8fafc',
+                        borderRadius: 14,
+                        paddingVertical: 12,
+                        paddingHorizontal: 16,
+                        borderWidth: 1,
+                        borderColor: colors.border
+                      }}
+                    >
+                      <View style={{ gap: 2 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: colors.text }}>
+                          {payDate}
+                        </Text>
+                        <Text style={{ fontSize: 8, fontWeight: '700', color: colors.subText, textTransform: 'uppercase' }}>
+                          💳 {t.paymentMethod || 'Direct Debit'}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '900', color: item.type === 'EXPENSE' ? '#f43f5e' : '#10b981' }}>
+                          ₹{Math.abs(t.amount).toLocaleString('en-IN')}
+                        </Text>
                         <View style={{ 
-                          backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', 
-                          paddingHorizontal: 6, 
+                          backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)', 
+                          borderColor: isOverduePaid ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+                          borderWidth: 1,
+                          paddingHorizontal: 8, 
                           paddingVertical: 2, 
-                          borderRadius: 4 
+                          borderRadius: 6 
                         }}>
                           <Text style={{ 
-                            fontSize: 6, 
+                            fontSize: 6.5, 
                             fontWeight: '900', 
-                            color: isOverduePaid ? '#ef4444' : '#10b981', 
+                            color: statusColor, 
                             textTransform: 'uppercase' 
                           }}>
                             {isOverduePaid ? 'Overdue Paid' : 'Paid'}
                           </Text>
                         </View>
-                      );
-                    })()}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -962,7 +1008,6 @@ export const SchedulesScreen: React.FC = () => {
             </View>
           </View>
         </Modal>
-
         {/* FORM MODAL */}
         <Modal
           visible={modalOpen}
@@ -978,108 +1023,95 @@ export const SchedulesScreen: React.FC = () => {
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               style={styles.keyboardView}
             >
+              {/* Card Header outside/above the card */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {editingSchedule ? 'EDIT REPETITION RULE' : 'NEW REPETITION RULE'}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setModalOpen(false);
+                    resetForm();
+                  }}
+                  style={{ padding: 4 }}
+                >
+                  <Text style={{ color: colors.subText, fontSize: 12, fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Main Card View (White background, left accent border) */}
               <Animated.View 
                 style={[
                   styles.modalCard, 
                   { 
                     backgroundColor: colors.card, 
                     borderColor: colors.border,
+                    borderLeftWidth: 6,
+                    borderLeftColor: type === 'EXPENSE' ? '#f43f5e' : '#10b981',
+                    borderRightWidth: 1,
+                    borderTopWidth: 1,
+                    borderBottomWidth: 1,
+                    padding: 20,
+                    borderRadius: 24,
+                    maxHeight: 520,
                     transform: [{ translateY: addSheetPanY }]
                   }
                 ]}
               >
-                {/* Drag Handle Bar */}
-                <View {...addSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
-                  <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
-                </View>
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>
-                    {editingSchedule ? 'EDIT REPETITION RULE' : 'NEW REPETITION RULE'}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setModalOpen(false);
-                      resetForm();
-                    }}
-                    style={styles.closeBtn}
-                  >
-                    <Text style={[styles.closeBtnText, { color: colors.subText }]}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
                 <ScrollView
-                  contentContainerStyle={styles.modalScroll}
+                  contentContainerStyle={{ paddingBottom: 10 }}
                   showsVerticalScrollIndicator={false}
                   nestedScrollEnabled
                 >
-                  
-                  {/* Type Select */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Transaction Type</Text>
-                    <View style={[styles.segmentedRow, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setType('EXPENSE');
-                          if (category === 'Salary') setCategory('Subscriptions');
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          type === 'EXPENSE' && styles.segmentedBtnActiveExpense
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedText,
-                            type === 'EXPENSE' ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                          ]}
-                        >
-                          Expense
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setType('INCOME');
-                          setCategory('Salary');
-                        }}
-                        style={[
-                          styles.segmentedBtn,
-                          type === 'INCOME' && styles.segmentedBtnActiveIncome
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentedText,
-                            type === 'INCOME' ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                          ]}
-                        >
-                          Income
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                  {/* Description */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={styles.formLabel}>Description</Text>
+                    <TextInput
+                      style={{
+                        borderBottomWidth: 1.5,
+                        borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                        color: colors.text,
+                        fontSize: 15,
+                        fontWeight: '700',
+                        paddingVertical: 4,
+                        paddingHorizontal: 0,
+                        backgroundColor: 'transparent'
+                      }}
+                      value={description}
+                      onChangeText={setDescription}
+                      placeholder="e.g. Netflix Subscription"
+                      placeholderTextColor={colors.subText}
+                    />
                   </View>
 
-                  {/* Frequency Select */}
-                  <View style={styles.formGroup}>
+                  {/* Billing Frequency */}
+                  <View style={{ marginBottom: 16 }}>
                     <Text style={styles.formLabel}>Billing Frequency</Text>
-                    <View style={[styles.segmentedRow, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                    <View style={[styles.segmentedRow, { backgroundColor: isDark ? '#27272a' : '#f1f5f9', borderColor: 'transparent', borderRadius: 12, padding: 3 }]}>
                       {FREQUENCIES.map(f => {
                         const isFreqDisabled = editingSchedule !== null && (f === 'DAILY' || f === 'WEEKLY');
+                        const isSelected = frequency === f;
                         return (
                           <TouchableOpacity
                             key={f}
                             disabled={isFreqDisabled}
                             onPress={() => setFrequency(f)}
-                            style={[
-                              styles.segmentedBtn,
-                              frequency === f && styles.segmentedBtnActiveDefault,
-                              isFreqDisabled && { opacity: 0.3 }
-                            ]}
+                            style={{
+                              flex: 1,
+                              paddingVertical: 8,
+                              borderRadius: 10,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: isSelected ? '#6366f1' : 'transparent',
+                              opacity: isFreqDisabled ? 0.3 : 1
+                            }}
                           >
                             <Text
-                              style={[
-                                styles.segmentedText,
-                                frequency === f ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                              ]}
+                              style={{
+                                fontSize: 9,
+                                fontWeight: isSelected ? '900' : '700',
+                                color: isSelected ? '#ffffff' : colors.subText
+                              }}
                             >
                               {f}
                             </Text>
@@ -1090,90 +1122,99 @@ export const SchedulesScreen: React.FC = () => {
                   </View>
 
                   {/* Weekdays selector for DAILY SPECIFIC_DAYS */}
-                  {frequency === 'DAILY' ? (
-                    <View style={styles.formGroup}>
+                  {frequency === 'DAILY' && (
+                    <View style={{ marginBottom: 16 }}>
                       <Text style={styles.formLabel}>Daily Options</Text>
-                      <View style={[styles.segmentedRow, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                      <View style={[styles.segmentedRow, { backgroundColor: isDark ? '#27272a' : '#f1f5f9', borderColor: 'transparent', borderRadius: 12, padding: 3, marginBottom: 8 }]}>
                         <TouchableOpacity
                           onPress={() => setDailyOption('EVERY_DAY')}
-                          style={[
-                            styles.segmentedBtn,
-                            dailyOption === 'EVERY_DAY' && styles.segmentedBtnActiveDefault
-                          ]}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: dailyOption === 'EVERY_DAY' ? '#6366f1' : 'transparent'
+                          }}
                         >
-                          <Text
-                            style={[
-                              styles.segmentedText,
-                              dailyOption === 'EVERY_DAY' ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                            ]}
-                          >
-                            Every Day
-                          </Text>
+                          <Text style={{ fontSize: 9, fontWeight: dailyOption === 'EVERY_DAY' ? '900' : '700', color: dailyOption === 'EVERY_DAY' ? '#ffffff' : colors.subText }}>Every Day</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           onPress={() => setDailyOption('SPECIFIC_DAYS')}
-                          style={[
-                            styles.segmentedBtn,
-                            dailyOption === 'SPECIFIC_DAYS' && styles.segmentedBtnActiveDefault
-                          ]}
+                          style={{
+                            flex: 1,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: dailyOption === 'SPECIFIC_DAYS' ? '#6366f1' : 'transparent'
+                          }}
                         >
-                          <Text
-                            style={[
-                              styles.segmentedText,
-                              dailyOption === 'SPECIFIC_DAYS' ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                            ]}
-                          >
-                            Specific Days
-                          </Text>
+                          <Text style={{ fontSize: 9, fontWeight: dailyOption === 'SPECIFIC_DAYS' ? '900' : '700', color: dailyOption === 'SPECIFIC_DAYS' ? '#ffffff' : colors.subText }}>Specific Days</Text>
                         </TouchableOpacity>
                       </View>
 
-                      {dailyOption === 'SPECIFIC_DAYS' ? (
-                        <View style={styles.weekdayRow}>
+                      {dailyOption === 'SPECIFIC_DAYS' && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
                           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => {
                             const isSelected = selectedWeekdays.includes(day);
                             return (
                               <TouchableOpacity
                                 key={day}
                                 onPress={() => toggleWeekday(day)}
-                                style={[
-                                  styles.weekdayCircle,
-                                  { backgroundColor: colors.inputBackground, borderColor: colors.border },
-                                  isSelected && styles.weekdayCircleActive
-                                ]}
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 14,
+                                  borderWidth: 1,
+                                  borderColor: isSelected ? '#6366f1' : colors.border,
+                                  backgroundColor: isSelected ? '#6366f1' : 'transparent',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
                               >
-                                <Text
-                                  style={[
-                                    styles.weekdayText,
-                                    isSelected ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
-                                  ]}
-                                >
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: isSelected ? '#ffffff' : colors.subText }}>
                                   {day[0]}
                                 </Text>
                               </TouchableOpacity>
                             );
                           })}
                         </View>
-                      ) : null}
+                      )}
                     </View>
-                  ) : null}
+                  )}
 
-                  {/* Description & Amount */}
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.formLabel}>Description</Text>
-                      <TextInput
-                        style={[styles.modalInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
-                        value={description}
-                        onChangeText={setDescription}
-                        placeholder="e.g. Netflix Subscription"
-                        placeholderTextColor={colors.subText}
+                  {/* Start Date & Cycle Amount */}
+                  <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
+                    <View style={{ flex: 1.2 }}>
+                      <Text style={styles.formLabel}>Start Date</Text>
+                      <CustomDatePicker
+                        value={startDate}
+                        onChange={setStartDate}
+                        dark={isDark}
+                        style={{
+                          backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                          borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                          borderRadius: 12,
+                          height: 42
+                        }}
                       />
                     </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.formLabel}>Cycle Amount (₹)</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.formLabel, { textAlign: 'right' }]}>Cycle Amount (₹)</Text>
                       <TextInput
-                        style={[styles.modalInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                        style={{
+                          borderBottomWidth: 1.5,
+                          borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                          color: type === 'EXPENSE' ? '#f43f5e' : '#10b981',
+                          fontSize: 20,
+                          fontWeight: '800',
+                          paddingVertical: 0,
+                          paddingHorizontal: 0,
+                          textAlign: 'right',
+                          height: 42,
+                          backgroundColor: 'transparent'
+                        }}
                         value={amount}
                         onChangeText={setAmount}
                         keyboardType="numeric"
@@ -1183,145 +1224,247 @@ export const SchedulesScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {/* Category Dropdown Selector */}
-                  <View style={{ marginBottom: 12, zIndex: 100 }}>
-                    <Text style={styles.formLabel}>Category</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setCatDropdownOpen(!catDropdownOpen);
-                        setFreqDropdownOpen(false);
-                        setPmDropdownOpen(false);
+                  {/* End Date (Optional) */}
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={styles.formLabel}>End Date (Optional)</Text>
+                    <CustomDatePicker
+                      value={endDate}
+                      onChange={setEndDate}
+                      dark={isDark}
+                      style={{
+                        backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                        borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                        borderRadius: 12,
+                        height: 42
                       }}
-                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-                    >
-                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
-                        {category || 'Select Category'}
-                      </Text>
-                      <ChevronDownIcon color={colors.subText} size={12} />
-                    </TouchableOpacity>
-                    {catDropdownOpen && (
-                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
-                          {SCHEDULE_CATEGORIES.map(c => (
-                            <TouchableOpacity
-                              key={c}
-                              onPress={() => {
-                                setCategory(c);
-                                setCatDropdownOpen(false);
-                              }}
-                              style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
-                            >
-                              <Text style={[styles.modalMenuText, { color: colors.text }]}>{c}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    )}
+                    />
                   </View>
 
-                  {/* Account select row */}
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
+                  {/* Dashed Border Box containing TYPE and CATEGORY */}
+                  <View 
+                    style={{
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderColor: type === 'EXPENSE'
+                        ? (isDark ? 'rgba(244, 63, 94, 0.4)' : 'rgba(244, 63, 94, 0.25)')
+                        : (isDark ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.25)'),
+                      borderRadius: 16,
+                      padding: 12,
+                      flexDirection: 'row',
+                      gap: 12,
+                      marginBottom: 16
+                    }}
+                  >
+                    {/* TYPE select dropdown */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.formLabel}>Type</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          const nextType = type === 'EXPENSE' ? 'INCOME' : 'EXPENSE';
+                          setType(nextType);
+                          if (nextType === 'INCOME') {
+                            setCategory('Salary');
+                          } else {
+                            if (category === 'Salary') setCategory('Subscriptions');
+                          }
+                        }}
+                        style={{
+                          height: 38,
+                          borderRadius: 10,
+                          backgroundColor: type === 'EXPENSE' ? 'rgba(244, 63, 94, 0.08)' : 'rgba(16, 185, 129, 0.08)',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexDirection: 'row',
+                          paddingHorizontal: 12
+                        }}
+                      >
+                        <Text style={{
+                          fontSize: 10,
+                          fontWeight: '900',
+                          color: type === 'EXPENSE' ? '#f43f5e' : '#10b981',
+                          textTransform: 'uppercase'
+                        }}>
+                          {type}
+                        </Text>
+                        <ChevronDownIcon color={type === 'EXPENSE' ? '#f43f5e' : '#10b981'} size={10} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* CATEGORY select dropdown */}
+                    <View style={{ flex: 1.2, zIndex: 100 }}>
+                      <Text style={styles.formLabel}>Category</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setCatDropdownOpen(!catDropdownOpen);
+                          setPmDropdownOpen(false);
+                        }}
+                        style={{
+                          height: 38,
+                          borderRadius: 10,
+                          backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                          paddingHorizontal: 10,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <Text style={{ fontSize: 9.5, fontWeight: '700', color: colors.text }} numberOfLines={1}>
+                          {category}
+                        </Text>
+                        <ChevronDownIcon color={colors.subText} size={10} />
+                      </TouchableOpacity>
+                      {catDropdownOpen && (
+                        <View style={[styles.modalMenu, { top: 40, backgroundColor: colors.card, borderColor: colors.border }]}>
+                          <ScrollView style={{ maxHeight: 120 }} nestedScrollEnabled>
+                            {SCHEDULE_CATEGORIES.map(c => (
+                              <TouchableOpacity
+                                key={c}
+                                onPress={() => {
+                                  setCategory(c);
+                                  setCatDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{c}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Account & Payment Method */}
+                  <View style={{ flexDirection: 'row', gap: 16, marginBottom: 16 }}>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.formLabel}>Account</Text>
                       <TextInput
-                        style={[styles.modalInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                        style={{
+                          height: 42,
+                          borderRadius: 12,
+                          backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                          borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                          borderWidth: 1,
+                          paddingHorizontal: 12,
+                          color: colors.text,
+                          fontSize: 11,
+                          fontWeight: '700'
+                        }}
                         value={account}
                         onChangeText={setAccount}
                         placeholder="SBI"
                         placeholderTextColor={colors.subText}
                       />
                     </View>
-                  </View>
 
-                  {/* Start Date & End Date */}
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.formLabel}>Start Date</Text>
-                      <CustomDatePicker
-                        value={startDate}
-                        onChange={setStartDate}
-                        dark={isDark}
-                      />
+                    <View style={{ flex: 1, zIndex: 90 }}>
+                      <Text style={styles.formLabel}>Payment Method</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPmDropdownOpen(!pmDropdownOpen);
+                          setCatDropdownOpen(false);
+                        }}
+                        style={{
+                          height: 42,
+                          borderRadius: 12,
+                          backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                          borderColor: isDark ? '#3f3f46' : '#cbd5e1',
+                          borderWidth: 1,
+                          paddingHorizontal: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text }}>
+                          {pm}
+                        </Text>
+                        <ChevronDownIcon color={colors.subText} size={10} />
+                      </TouchableOpacity>
+                      {pmDropdownOpen && (
+                        <View style={[styles.modalMenu, { top: 40, backgroundColor: colors.card, borderColor: colors.border }]}>
+                          <ScrollView style={{ maxHeight: 120 }} nestedScrollEnabled>
+                            {PAYMENT_METHODS.map(p => (
+                              <TouchableOpacity
+                                key={p}
+                                onPress={() => {
+                                  setPm(p);
+                                  setPmDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{p}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      )}
                     </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.formLabel}>End Date (Opt)</Text>
-                      <CustomDatePicker
-                        value={endDate}
-                        onChange={setEndDate}
-                        dark={isDark}
-                      />
-                    </View>
                   </View>
 
-                  {/* Payment Method */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Payment Method</Text>
-                    <TouchableOpacity
-                      onPress={() => setPmDropdownOpen(!pmDropdownOpen)}
-                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
-                    >
-                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>{pm}</Text>
-                      <ChevronDownIcon color={colors.subText} size={12} />
-                    </TouchableOpacity>
-                    {pmDropdownOpen ? (
-                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
-                          {PAYMENT_METHODS.map(p => (
-                            <TouchableOpacity
-                              key={p}
-                              onPress={() => {
-                                setPm(p);
-                                setPmDropdownOpen(false);
-                              }}
-                              style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
-                            >
-                              <Text style={[styles.modalMenuText, { color: colors.text }]}>{p}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Notes */}
-                  <View style={styles.formGroup}>
-                    <Text style={styles.formLabel}>Notes</Text>
+                  {/* Notes Log */}
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={styles.formLabel}>Notes Log</Text>
                     <TextInput
-                      style={[styles.modalInput, styles.notesInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                      style={{
+                        backgroundColor: isDark ? '#27272a' : '#f1f5f9',
+                        borderRadius: 16,
+                        padding: 12,
+                        color: colors.text,
+                        fontSize: 11,
+                        fontWeight: '600',
+                        height: 70,
+                        textAlignVertical: 'top'
+                      }}
                       value={notes}
                       onChangeText={setNotes}
-                      placeholder="Enter subscription/EMI notes..."
+                      placeholder="Additional details..."
                       placeholderTextColor={colors.subText}
                       multiline={true}
                       numberOfLines={3}
                     />
                   </View>
-
                 </ScrollView>
-
-                {/* Submitting Status */}
-                {submitting ? (
-                  <ActivityIndicator size="small" color="#ffffff" style={{ marginVertical: 10 }} />
-                ) : (
-                  <View style={styles.btnRow}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setModalOpen(false);
-                        resetForm();
-                      }}
-                      style={[styles.btn, styles.cancelBtn, { backgroundColor: '#000000', borderColor: '#ffffff', borderWidth: 1.5 }]}
-                    >
-                      <Text style={[styles.btnText, { color: '#ffffff', fontWeight: '900' }]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={handleSubmit}
-                      style={[styles.btn, styles.saveBtn, { backgroundColor: '#10b981' }]}
-                    >
-                      <Text style={[styles.btnText, { color: '#ffffff', fontWeight: 'bold' }]}>Save Rule</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
               </Animated.View>
+
+              {/* Actions row outside/below the card */}
+              {submitting ? (
+                <ActivityIndicator size="small" color="#ffffff" style={{ marginVertical: 12 }} />
+              ) : (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 16 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setModalOpen(false);
+                      resetForm();
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'transparent'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: colors.text, textTransform: 'uppercase' }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleSubmit}
+                    style={{
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 14,
+                      backgroundColor: isDark ? '#ffffff' : '#0f172a',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: isDark ? '#000000' : '#ffffff', textTransform: 'uppercase' }}>Save Rule</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </KeyboardAvoidingView>
           </View>
         </Modal>
@@ -1558,24 +1701,40 @@ export const SchedulesScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {/* Actions */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
-                    <TouchableOpacity
-                      onPress={resetFilters}
-                      style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]}
-                    >
-                      <Text style={{ color: colors.text, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Reset</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={applyFilters}
-                      style={[styles.actionBtn, { backgroundColor: '#6366f1' }]}
-                    >
-                      <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Apply Filters</Text>
-                    </TouchableOpacity>
-                  </View>
-
                 </View>
               </ScrollView>
+
+              {/* Actions sticky at the bottom */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 }}>
+                <TouchableOpacity
+                  onPress={resetFilters}
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 14,
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: colors.text, textTransform: 'uppercase' }}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={applyFilters}
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: '#6366f1',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
         </Modal>

@@ -7,9 +7,10 @@ interface CustomDatePickerProps {
   value: string;
   onChange: (val: string) => void;
   dark?: boolean;
+  style?: any;
 }
 
-export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, dark = false }) => {
+export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onChange, dark = false, style }) => {
   const [show, setShow] = useState(false);
   const [date, setDate] = useState(value ? new Date(value) : new Date());
 
@@ -43,7 +44,8 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({ value, onCha
         onPress={() => setShow(true)}
         style={[
           styles.button,
-          dark ? styles.buttonDark : styles.buttonLight
+          dark ? styles.buttonDark : styles.buttonLight,
+          style
         ]}
         activeOpacity={0.7}
       >
