@@ -45,7 +45,7 @@ import {
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 
-const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY'];
+const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
 const SCHEDULE_CATEGORIES = [
   'Subscriptions',
   'Rent',
@@ -159,6 +159,14 @@ export const SchedulesScreen: React.FC = () => {
   // Custom Delete Modal States
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [idToDelete, setIdToDelete] = useState<string | null>(null);
+
+  // Shadcn-style Alert Dialog States
+  const [alertDialogVisible, setAlertDialogVisible] = useState(false);
+  const [alertDialogTitle, setAlertDialogTitle] = useState('');
+  const [alertDialogDescription, setAlertDialogDescription] = useState('');
+  const [alertDialogActionLabel, setAlertDialogActionLabel] = useState('');
+  const [alertDialogActionColor, setAlertDialogActionColor] = useState('#6366f1');
+  const [onAlertDialogConfirm, setOnAlertDialogConfirm] = useState<() => void>(() => {});
 
   // Modal Form States
   const [modalOpen, setModalOpen] = useState(false);
@@ -368,8 +376,19 @@ export const SchedulesScreen: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    setIdToDelete(id);
-    setDeleteModalOpen(true);
+    setAlertDialogTitle('Cancel Schedule');
+    setAlertDialogDescription('Are you sure you want to cancel this recurring schedule? This action cannot be undone.');
+    setAlertDialogActionLabel('Cancel Schedule');
+    setAlertDialogActionColor('#f43f5e');
+    setOnAlertDialogConfirm(() => async () => {
+      try {
+        await deleteScheduleApi(id);
+        loadData();
+      } catch (err) {
+        showCustomAlert('Error', 'Failed to cancel schedule.');
+      }
+    });
+    setAlertDialogVisible(true);
   };
 
   const handleApprove = async (id: string) => {
@@ -388,6 +407,24 @@ export const SchedulesScreen: React.FC = () => {
     } catch (err) {
       showCustomAlert('Error', 'Failed to skip occurrence.');
     }
+  };
+
+  const confirmSkip = (id: string) => {
+    setAlertDialogTitle('Skip Occurrence');
+    setAlertDialogDescription('Are you sure you want to skip this payment occurrence? This action cannot be undone.');
+    setAlertDialogActionLabel('Skip');
+    setAlertDialogActionColor('#6366f1');
+    setOnAlertDialogConfirm(() => () => handleSkip(id));
+    setAlertDialogVisible(true);
+  };
+
+  const confirmApprove = (id: string) => {
+    setAlertDialogTitle('Approve Payment');
+    setAlertDialogDescription('Are you sure you want to mark this recurring payment as Paid? This will log a new transaction.');
+    setAlertDialogActionLabel('Approve');
+    setAlertDialogActionColor('#10b981');
+    setOnAlertDialogConfirm(() => () => handleApprove(id));
+    setAlertDialogVisible(true);
   };
 
   const handlePressCard = (id: string) => {
@@ -569,17 +606,7 @@ export const SchedulesScreen: React.FC = () => {
             No past payments recorded for this schedule.
           </Text>
         ) : (
-          <View style={{ position: 'relative', paddingLeft: 4, marginTop: 4 }}>
-            {/* The vertical timeline connector line */}
-            <View style={{
-              position: 'absolute',
-              left: 11,
-              top: 20,
-              bottom: 20,
-              width: 2,
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(99, 102, 241, 0.15)'
-            }} />
-
+          <View style={{ marginTop: 4 }}>
             <View style={{ gap: 12 }}>
               {history.map((t, idx) => {
                 const payDate = new Date(t.transactionDate || (t as any).date).toLocaleDateString('en-IN', {
@@ -589,37 +616,53 @@ export const SchedulesScreen: React.FC = () => {
                 });
                 const isOverduePaid = t.note && t.note.includes('[Overdue]');
                 const statusColor = isOverduePaid ? '#ef4444' : '#10b981';
+                const isFirst = idx === 0;
+                const isLast = idx === history.length - 1;
+                const isOnly = history.length === 1;
 
                 return (
                   <View
                     key={t.id || idx}
                     style={{
                       flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingLeft: 28,
+                      alignItems: 'stretch',
                       position: 'relative'
                     }}
                   >
-                    {/* Timeline Dot (Double Ring) */}
-                    <View style={{
-                      position: 'absolute',
-                      left: 4,
-                      top: '50%',
-                      marginTop: -8,
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      zIndex: 10
-                    }}>
+                    {/* Symmetrical Left Timeline Column */}
+                    <View style={{ width: 24, position: 'relative' }}>
+                      {!isOnly && (
+                        <View style={{
+                          position: 'absolute',
+                          left: 11,
+                          top: isFirst ? 22 : 0,
+                          bottom: isLast ? undefined : 0,
+                          height: isLast ? 22 : undefined,
+                          width: 2,
+                          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(99, 102, 241, 0.15)'
+                        }} />
+                      )}
+
+                      {/* Timeline Dot (Double Ring) */}
                       <View style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: statusColor,
-                      }} />
+                        position: 'absolute',
+                        left: 4,
+                        top: 14,
+                        width: 16,
+                        height: 16,
+                        borderRadius: 8,
+                        backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10
+                      }}>
+                        <View style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: statusColor,
+                        }} />
+                      </View>
                     </View>
 
                     {/* Card container */}
@@ -678,17 +721,17 @@ export const SchedulesScreen: React.FC = () => {
         <TouchableOpacity
           onPress={() => handleEdit(item)}
           style={{
-            height: 38,
-            borderRadius: 10,
-            backgroundColor: '#27272a',
-            borderWidth: 1,
+            height: 42,
+            borderRadius: 12,
+            borderWidth: 1.5,
             borderColor: colors.border,
             alignItems: 'center',
             justifyContent: 'center',
-            marginTop: 6
+            backgroundColor: 'transparent',
+            marginTop: 12
           }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>
+          <Text style={{ fontSize: 10.5, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             View / Edit Details
           </Text>
         </TouchableOpacity>
@@ -776,7 +819,7 @@ export const SchedulesScreen: React.FC = () => {
             renderItem={({ item }) => {
               const isExpense = item.type.toUpperCase() === 'EXPENSE';
               const freqText = item.frequency.toLowerCase();
-              const cycleText = freqText === 'daily' ? 'day' : freqText === 'weekly' ? 'week' : 'month';
+              const cycleText = freqText === 'daily' ? 'day' : freqText === 'weekly' ? 'week' : freqText === 'monthly' ? 'month' : 'year';
               const isDue = getEffectiveNextRunDate(item) <= new Date() && (item.status || 'ACTIVE') !== 'COMPLETED';
               const isCompleted = item.status === 'COMPLETED';
               const cardBorderLeftColor = isCompleted ? '#71717a' : (isExpense ? '#f43f5e' : '#10b981');
@@ -850,13 +893,13 @@ export const SchedulesScreen: React.FC = () => {
                         </View>
                         <View style={styles.pendingActionRow}>
                           <TouchableOpacity
-                            onPress={() => handleSkip(item.id)}
+                            onPress={() => confirmSkip(item.id)}
                             style={[styles.skipBtn, { borderColor: colors.border }]}
                           >
                             <Text style={[styles.skipBtnText, { color: colors.subText }]}>Skip</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
-                            onPress={() => handleApprove(item.id)}
+                            onPress={() => confirmApprove(item.id)}
                             style={styles.approveBtn}
                           >
                             <Text style={styles.approveBtnText}>Pay & Approve</Text>
@@ -939,13 +982,13 @@ export const SchedulesScreen: React.FC = () => {
                       </View>
                       <View style={styles.pendingActionRow}>
                         <TouchableOpacity
-                          onPress={() => handleSkip(item.id)}
+                          onPress={() => confirmSkip(item.id)}
                           style={[styles.skipBtn, { borderColor: colors.border }]}
                         >
                           <Text style={[styles.skipBtnText, { color: colors.subText }]}>Skip</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() => handleApprove(item.id)}
+                          onPress={() => confirmApprove(item.id)}
                           style={styles.approveBtn}
                         >
                           <Text style={styles.approveBtnText}>Approve</Text>
@@ -964,45 +1007,96 @@ export const SchedulesScreen: React.FC = () => {
         {/* BOTTOM TAB BAR */}
         <BottomTabBar activeTab="Schedules" />
 
-        {/* CUSTOM DELETE CONFIRMATION MODAL */}
+        {/* SHADCN-STYLE ALERT DIALOG */}
         <Modal
-          visible={deleteModalOpen}
+          visible={alertDialogVisible}
           animationType="fade"
           transparent={true}
-          onRequestClose={() => setDeleteModalOpen(false)}
+          onRequestClose={() => setAlertDialogVisible(false)}
         >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.confirmModalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.confirmIconContainer}>
-                <TrashIcon color="#f43f5e" size={20} />
-              </View>
-              <Text style={[styles.confirmTitle, { color: colors.text }]}>Cancel Schedule</Text>
-              <Text style={[styles.confirmSub, { color: colors.subText }]}>
-                Are you sure you want to cancel this recurring schedule? It will be marked as Completed and moved to your logs.
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(9, 9, 11, 0.7)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20
+          }}>
+            <View style={{
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 24,
+              width: '100%',
+              maxWidth: 320,
+              shadowColor: '#000',
+              shadowOpacity: 0.1,
+              shadowRadius: 10,
+              elevation: 5
+            }}>
+              <Text style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: colors.text,
+                marginBottom: 8
+              }}>
+                {alertDialogTitle}
               </Text>
-              <View style={styles.confirmActionRow}>
+              <Text style={{
+                fontSize: 11,
+                color: colors.subText,
+                lineHeight: 16,
+                marginBottom: 20
+              }}>
+                {alertDialogDescription}
+              </Text>
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'flex-end',
+                gap: 8
+              }}>
                 <TouchableOpacity
-                  onPress={() => setDeleteModalOpen(false)}
-                  style={[styles.confirmCancelBtn, { backgroundColor: colors.inputBackground }]}
+                  onPress={() => setAlertDialogVisible(false)}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
-                  <Text style={[styles.confirmCancelBtnText, { color: colors.text }]}>Keep Active</Text>
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: colors.text
+                  }}>
+                    Cancel
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={async () => {
-                    if (idToDelete) {
-                      try {
-                        await deleteScheduleApi(idToDelete);
-                        setDeleteModalOpen(false);
-                        setIdToDelete(null);
-                        loadData();
-                      } catch (err) {
-                        showCustomAlert('Error', 'Failed to cancel schedule.');
-                      }
-                    }
+                  onPress={() => {
+                    setAlertDialogVisible(false);
+                    onAlertDialogConfirm();
                   }}
-                  style={styles.confirmDeleteBtn}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: alertDialogActionColor,
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
                 >
-                  <Text style={styles.confirmDeleteBtnText}>Yes, Cancel</Text>
+                  <Text style={{
+                    fontSize: 11,
+                    fontWeight: '600',
+                    color: '#ffffff'
+                  }}>
+                    {alertDialogActionLabel}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1314,7 +1408,15 @@ export const SchedulesScreen: React.FC = () => {
                         <ChevronDownIcon color={colors.subText} size={10} />
                       </TouchableOpacity>
                       {catDropdownOpen && (
-                        <View style={[styles.modalMenu, { top: 40, backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={{
+                          marginTop: 4,
+                          width: '100%',
+                          backgroundColor: colors.card,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderRadius: 10,
+                          padding: 4
+                        }}>
                           <ScrollView style={{ maxHeight: 120 }} nestedScrollEnabled>
                             {SCHEDULE_CATEGORIES.map(c => (
                               <TouchableOpacity
@@ -1382,7 +1484,15 @@ export const SchedulesScreen: React.FC = () => {
                         <ChevronDownIcon color={colors.subText} size={10} />
                       </TouchableOpacity>
                       {pmDropdownOpen && (
-                        <View style={[styles.modalMenu, { top: 40, backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <View style={{
+                          marginTop: 4,
+                          width: '100%',
+                          backgroundColor: colors.card,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          borderRadius: 10,
+                          padding: 4
+                        }}>
                           <ScrollView style={{ maxHeight: 120 }} nestedScrollEnabled>
                             {PAYMENT_METHODS.map(p => (
                               <TouchableOpacity
