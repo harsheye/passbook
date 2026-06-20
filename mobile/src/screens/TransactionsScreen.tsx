@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import {
   Platform,
   ScrollView,
   Alert,
-  Modal
+  Modal,
+  PanResponder,
+  Animated
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -79,7 +81,20 @@ const CATEGORY_ICONS: Record<string, string> = {
   'Co-working Rent': '🏢',
   'Internet/Phone': '🌐',
   'Professional Fees': '👨‍💼',
-  'GST/Tax': '🧾'
+  'GST/Tax': '🧾',
+  'Miscellaneous': '🏷️',
+  'Fitness/Sports': '🏋️',
+  'Gifts': '🎁',
+  'Beauty/Wellness': '💅',
+  'Loan/EMI Payments': '💳',
+  'Money Transfers': '💸',
+  'Refund': '🔄',
+  'Cashback': '🏷️',
+  'Other Income': '💰',
+  'Bonus': '🏆',
+  'Interest': '🏦',
+  'Investment Returns': '📊',
+  'Business Income': '📈'
 };
 
 const FILTER_PAYMENT_METHODS = ['All', 'UPI', 'Card', 'Cash', 'Net Banking'];
@@ -114,6 +129,32 @@ export const TransactionsScreen: React.FC = () => {
   
   // Dropdown state
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+
+  // PanResponder for swiping down the filter modal
+  const filterSheetPanY = useRef(new Animated.Value(0)).current;
+
+  const filterSheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_: any, gestureState: any) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          filterSheetPanY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          setFilterModalOpen(false);
+          filterSheetPanY.setValue(0);
+        } else {
+          Animated.spring(filterSheetPanY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Month / Year selection
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
@@ -208,6 +249,7 @@ export const TransactionsScreen: React.FC = () => {
     setTempMaxAmount(maxAmount);
     setModalCategoryDropdownOpen(false);
     setModalPmDropdownOpen(false);
+    filterSheetPanY.setValue(0);
     setFilterModalOpen(true);
   };
 
@@ -682,7 +724,21 @@ export const TransactionsScreen: React.FC = () => {
           onRequestClose={() => setFilterModalOpen(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: colors.card, borderTopColor: colors.border, borderWidth: 1 }]}>
+            <Animated.View 
+              style={[
+                styles.modalSheet, 
+                { 
+                  backgroundColor: colors.card, 
+                  borderTopColor: colors.border, 
+                  borderWidth: 1,
+                  transform: [{ translateY: filterSheetPanY }]
+                }
+              ]}
+            >
+              {/* Drag Handle Bar */}
+              <View {...filterSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
+                <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+              </View>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: colors.text }]}>FILTER TRANSACTIONS</Text>
                 <TouchableOpacity
@@ -858,7 +914,7 @@ export const TransactionsScreen: React.FC = () => {
 
                 </View>
               </ScrollView>
-            </View>
+            </Animated.View>
           </View>
         </Modal>
 
@@ -1203,12 +1259,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(9, 9, 11, 0.75)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalSheet: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
     maxHeight: '85%',
+    width: '100%',
+    maxWidth: 360,
+    flexShrink: 1,
   },
   modalHeader: {
     flexDirection: 'row',

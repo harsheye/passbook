@@ -132,6 +132,7 @@ model RecurringTransaction {
   lastRunDate   DateTime?
   notes         String?   @default("")
   tags          String?   @default("")
+  status        String    @default("ACTIVE")
   createdAt     DateTime  @default(now())
 }
 

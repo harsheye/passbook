@@ -119,8 +119,11 @@ export class RecurringController {
         return res.status(404).json({ error: 'Recurring schedule not found or unauthorized' });
       }
 
-      await prisma.recurringTransaction.delete({ where: { id } });
-      return res.json({ message: 'Recurring transaction schedule cancelled and deleted' });
+      await prisma.recurringTransaction.update({
+        where: { id },
+        data: { status: 'COMPLETED' }
+      });
+      return res.json({ message: 'Recurring transaction schedule cancelled and marked as completed' });
     } catch (error: any) {
       return res.status(500).json({ error: error.message });
     }
@@ -218,6 +221,17 @@ export class RecurringController {
       const numAmount = Math.abs(schedule.amount);
       const signedAmt = schedule.type === 'EXPENSE' ? -numAmount : numAmount;
 
+      const today = new Date();
+      const schedDate = new Date(schedule.nextRunDate);
+      schedDate.setHours(0, 0, 0, 0);
+      const compareToday = new Date(today);
+      compareToday.setHours(0, 0, 0, 0);
+      const isOverdue = compareToday.getTime() > schedDate.getTime();
+      const statusSuffix = isOverdue ? '[Overdue]' : '[On-time]';
+
+      const baseNote = schedule.notes ? `${schedule.notes} ` : '';
+      const finalNote = `${baseNote}[Schedule ID: ${schedule.id}] ${statusSuffix}`;
+
       const newTxn = await prisma.transaction.create({
         data: {
           userId: schedule.userId,
@@ -229,7 +243,7 @@ export class RecurringController {
           subcategoryId: schedule.subcategory || 'General',
           paymentMethod: schedule.paymentMethod || 'Direct Debit',
           accountId: schedule.account || 'SBI',
-          note: schedule.notes || `Automatically generated from schedule ID: ${schedule.id}`,
+          note: finalNote,
           tags: schedule.tags || ''
         }
       });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
   SafeAreaView,
   Platform,
   StatusBar,
-  Modal
+  Modal,
+  PanResponder,
+  Animated
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -147,9 +149,42 @@ export const AddTransactionScreen: React.FC = () => {
   // Modal / Sheet visibilities
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
   const [pmDropdownOpen, setPmDropdownOpen] = useState(false);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
   const [isCreatingCustomCategory, setIsCreatingCustomCategory] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+
+  // PanResponder for Category Sheet swipe-down close
+  const catSheetPanY = useRef(new Animated.Value(0)).current;
+
+  const catSheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_: any, gestureState: any) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          catSheetPanY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          Animated.timing(catSheetPanY, {
+            toValue: 800,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            setCategorySheetVisible(false);
+            catSheetPanY.setValue(0);
+          });
+        } else {
+          Animated.spring(catSheetPanY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
   
   // Custom warning modal
   const [alertModalVisible, setAlertModalVisible] = useState(false);
@@ -389,10 +424,9 @@ export const AddTransactionScreen: React.FC = () => {
                 <Text style={[styles.boxLabel, { color: colors.subText }]}>Category</Text>
                 <TouchableOpacity
                   onPress={() => {
-                    setCategorySheetVisible(true);
-                    setIsCreatingCustomCategory(false);
-                    setTypeDropdownOpen(false);
+                    setCatDropdownOpen(!catDropdownOpen);
                     setPmDropdownOpen(false);
+                    setTypeDropdownOpen(false);
                   }}
                   style={[styles.dropdownBtn, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                   disabled={txnType === 'Transfer'}
@@ -407,6 +441,53 @@ export const AddTransactionScreen: React.FC = () => {
                   </View>
                   {txnType !== 'Transfer' && <ChevronDownIcon color={colors.subText} size={12} />}
                 </TouchableOpacity>
+
+                {catDropdownOpen && (
+                  <View style={[styles.boxMenu, { left: 0, top: 46, backgroundColor: colors.card, borderColor: colors.border, maxHeight: 200, width: '100%' }]}>
+                    <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 188 }} showsVerticalScrollIndicator={true}>
+                      {baseCategories.map(c => {
+                        const details = getCategoryDetails(c);
+                        return (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => {
+                              setCategory(c);
+                              setCatDropdownOpen(false);
+                            }}
+                            style={[styles.boxMenuItem, { borderBottomColor: colors.border }]}
+                          >
+                            <Text style={{ marginRight: 6 }}>{details.emoji}</Text>
+                            <Text style={[styles.boxMenuText, { color: colors.text }]}>{c}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {filteredCustom.map(c => (
+                        <TouchableOpacity
+                          key={c.name}
+                          onPress={() => {
+                            setCategory(c.name);
+                            setCatDropdownOpen(false);
+                          }}
+                          style={[styles.boxMenuItem, { borderBottomColor: colors.border }]}
+                        >
+                          <Text style={{ marginRight: 6 }}>{c.emoji}</Text>
+                          <Text style={[styles.boxMenuText, { color: colors.text }]}>{c.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setCatDropdownOpen(false);
+                          setIsCreatingCustomCategory(true);
+                          setCategorySheetVisible(true);
+                        }}
+                        style={[styles.boxMenuItem, { borderBottomColor: colors.border, backgroundColor: 'rgba(99, 102, 241, 0.08)' }]}
+                      >
+                        <Text style={{ marginRight: 6, color: '#6366f1', fontWeight: 'bold' }}>+</Text>
+                        <Text style={[styles.boxMenuText, { color: '#6366f1', fontWeight: 'bold' }]}>Create Custom Category</Text>
+                      </TouchableOpacity>
+                    </ScrollView>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -544,7 +625,21 @@ export const AddTransactionScreen: React.FC = () => {
         onRequestClose={() => setCategorySheetVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: colors.card, borderTopColor: colors.border, borderWidth: 1 }]}>
+          <Animated.View 
+            style={[
+              styles.modalSheet, 
+              { 
+                backgroundColor: colors.card, 
+                borderTopColor: colors.border, 
+                borderWidth: 1,
+                transform: [{ translateY: catSheetPanY }]
+              }
+            ]}
+          >
+            {/* Drag Handle Bar */}
+            <View {...catSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
+              <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+            </View>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.text }]}>
                 {isCreatingCustomCategory ? 'CREATE CATEGORY' : 'SELECT CATEGORY'}
@@ -699,7 +794,7 @@ export const AddTransactionScreen: React.FC = () => {
                 </View>
               </ScrollView>
             )}
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 

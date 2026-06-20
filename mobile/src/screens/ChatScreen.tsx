@@ -104,15 +104,75 @@ const CATEGORIES = [
 
 const STORAGE_KEY = 'passbook_mobile_chat_history';
 
+const CATEGORY_ICONS: Record<string, string> = {
+  'Salary': '💼',
+  'Eating Out/Ordering In': '🍔',
+  'Eating Out': '🍔',
+  'Shopping': '🛍️',
+  'Rent': '🏠',
+  'Travel': '🚗',
+  'Groceries': '🛒',
+  'Subscriptions': '📺',
+  'Investment': '📈',
+  'Utilities/Bills': '⚡',
+  'Utilities': '⚡',
+  'Freelancing': '💻',
+  'Dining': '🍔',
+  'Transit': '🚇',
+  'Entertainment': '🎬',
+  'Healthcare': '🏥',
+  'Agriculture Income': '🌾',
+  'Seeds/Fertilizers': '🌱',
+  'Equipment': '🚜',
+  'Labor/Wages': '👥',
+  'Mandi/Transport': '🚚',
+  'Subsidies': '💸',
+  'Personal': '👤',
+  'Sales Revenue': '📈',
+  'Inventory Cost': '📦',
+  'Office Rent': '🏢',
+  'Wages/Salaries': '👥',
+  'Marketing': '📣',
+  'Tax/GST': '🧾',
+  'Office Supplies': '📁',
+  'Pocket Money': '🪙',
+  'Tuition Fees': '🎓',
+  'Books/Stationery': '📚',
+  'Dining Out': '🍔',
+  'Gadgets': '💻',
+  'Household Budget': '👛',
+  'Kids Education': '🎒',
+  'Gold/Jewelry': '👑',
+  'Emergency Savings': '🏦',
+  'Client Payments': '💳',
+  'Software/Tools': '🛠️',
+  'Co-working Rent': '🏢',
+  'Internet/Phone': '🌐',
+  'Professional Fees': '👨‍💼',
+  'GST/Tax': '🧾',
+  'Miscellaneous': '🏷️',
+  'Fitness/Sports': '🏋️',
+  'Gifts': '🎁',
+  'Beauty/Wellness': '💅',
+  'Loan/EMI Payments': '💳',
+  'Money Transfers': '💸',
+  'Refund': '🔄',
+  'Cashback': '🏷️',
+  'Other Income': '💰',
+  'Bonus': '🏆',
+  'Interest': '🏦',
+  'Investment Returns': '📊',
+  'Business Income': '📈'
+};
+
 const getCategoryEmoji = (category: string, type?: string) => {
   if (type === 'Transfer') return '⇄';
-  const c = category.toLowerCase();
-  if (c === 'salary' || c === 'freelancing' || c === 'business income' || c.includes('stipend')) return '💻';
-  if (c.includes('eating out') || c.includes('ordering in') || c === 'groceries') return '🍔';
-  if (c === 'fuel' || c === 'travel') return '🚗';
-  if (c === 'shopping') return '🛍️';
-  if (c === 'entertainment') return '🎬';
-  return '📦';
+  const c = (category || '').trim();
+  if (CATEGORY_ICONS[c]) return CATEGORY_ICONS[c];
+  const keys = Object.keys(CATEGORY_ICONS);
+  const foundKey = keys.find(k => k.toLowerCase() === c.toLowerCase());
+  if (foundKey) return CATEGORY_ICONS[foundKey];
+  return '🏷️';
 };
 
 export const ChatScreen: React.FC = () => {
@@ -1493,7 +1553,7 @@ export const ChatScreen: React.FC = () => {
             backgroundColor: isDark ? 'rgba(24, 50, 53, 0.95)' : 'rgba(255, 255, 255, 0.95)',
             borderRadius: 24,
             marginHorizontal: 16,
-            marginBottom: 0
+            marginBottom: keyboardVisible ? 8 : 72
           }
         ]}>
           {selectedImage && (
@@ -1515,7 +1575,7 @@ export const ChatScreen: React.FC = () => {
 
           <View style={[styles.inputForm, { backgroundColor: colors.inputBackground }]}>
             <View style={styles.scannerActions}>
-              {/* Receipt Scan mock button */}
+              {/* Receipt Mock scan */}
               <TouchableOpacity onPress={handleCameraPress} style={styles.scanBtn}>
                 <CameraIcon color="#10b981" size={16} />
               </TouchableOpacity>
@@ -1557,7 +1617,7 @@ export const ChatScreen: React.FC = () => {
         </View>
 
         {/* MODULAR BOTTOM TAB BAR (inline footer) */}
-        <BottomTabBar activeTab="Chat" />
+        {!keyboardVisible && <BottomTabBar activeTab="Chat" />}
 
       {/* Category Selection Modal Sheet */}
       <Modal

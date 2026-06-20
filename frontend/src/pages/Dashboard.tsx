@@ -43,6 +43,8 @@ interface DashboardData {
     monthly: any[];
     category: any[];
     categoryIncome: any[];
+    subcategory?: any[];
+    subcategoryIncome?: any[];
     daily: any[];
   };
 }
@@ -98,6 +100,14 @@ const INCOME_CATEGORIES = [
   'Cashback',
   'Other Income'
 ];
+
+const hexToRgba = (hex: string, alpha: number): string => {
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.slice(0, 2), 16);
+  const g = parseInt(cleanHex.slice(2, 4), 16);
+  const b = parseInt(cleanHex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 export const Dashboard: React.FC = () => {
   const location = useLocation();
@@ -420,6 +430,19 @@ export const Dashboard: React.FC = () => {
   const filteredPieData = listToRender.filter(c => c.value > 0 && selectedCats.includes(c.name));
   const totalPieSum = filteredPieData.reduce((sum, item) => sum + item.value, 0);
 
+  const innerPieData = (pieFlowType === 'EXPENSE' ? charts.category : (charts.categoryIncome || []))
+    .filter((c: any) => c.value > 0);
+
+  const rawOuterPieData = (pieFlowType === 'EXPENSE' ? (charts.subcategory || []) : (charts.subcategoryIncome || []))
+    .filter((c: any) => c.value > 0);
+
+  // Group and order outer pie subcategories by parent category to align with Recharts inner segments
+  const outerPieData: any[] = [];
+  innerPieData.forEach((parent: any) => {
+    const matches = rawOuterPieData.filter((sub: any) => sub.parentCategory === parent.name);
+    outerPieData.push(...matches);
+  });
+
   return (
     <div className="space-y-6 animate-fadeIn pb-16 select-none text-black dark:text-white">
       
@@ -580,80 +603,102 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Transaction Ratio Donut Chart */}
+          {/* Nested Category & Subcategory spending Pie Chart */}
           {ratioCardVisible && (
             <div className="bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-3xl p-5 shadow-premium space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="font-extrabold text-xs">Transaction Ratio ({selectedYear})</h3>
-                <button
-                  onClick={() => setRatioCardVisible(false)}
-                  className="text-slate-405 hover:text-black dark:hover:text-white font-bold text-sm cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="flex flex-col items-center justify-center relative py-4">
-                <svg width="140" height="140" viewBox="0 0 100 100" className="mx-auto transform -rotate-90">
-                  {totalAmt === 0 ? (
-                    <circle cx="50" cy="50" r="32" fill="transparent" stroke="#4b5563" strokeWidth="12" />
-                  ) : (
-                    <>
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="32"
-                        fill="transparent"
-                        stroke="#5c7cfa"
-                        strokeWidth="12"
-                        strokeDasharray="201.06"
-                        strokeDashoffset={201.06 - (incomePct * 201.06)}
-                        strokeLinecap="round"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="32"
-                        fill="transparent"
-                        stroke="#e05e5e"
-                        strokeWidth="12"
-                        strokeDasharray="201.06"
-                        strokeDashoffset={201.06 - (expensePct * 201.06)}
-                        transform={`rotate(${incomePct * 360} 50 50)`}
-                        strokeLinecap="round"
-                      />
-                    </>
-                  )}
-                </svg>
-
-                <div className="absolute text-center flex flex-col items-center justify-center">
-                  <span className="text-[7.5px] uppercase font-black text-slate-400">Total Flows</span>
-                  <div className="text-xs font-black tracking-tight text-slate-800 dark:text-white">
-                    ₹{totalAmt.toLocaleString('en-IN')}
-                  </div>
+                <div>
+                  <h3 className="font-extrabold text-xs">Category Breakdown ({pieFlowType})</h3>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">Nested subcategory analysis</p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setPieFlowType(pieFlowType === 'EXPENSE' ? 'INCOME' : 'EXPENSE')}
+                    className="px-2 py-1 text-[8px] font-black uppercase bg-slate-50 hover:bg-slate-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 rounded-lg text-slate-700 dark:text-slate-200 cursor-pointer"
+                  >
+                    Show {pieFlowType === 'EXPENSE' ? 'Inflows' : 'Outflows'}
+                  </button>
+                  <button
+                    onClick={() => setRatioCardVisible(false)}
+                    className="text-slate-400 hover:text-black dark:hover:text-white font-bold text-xs cursor-pointer ml-2"
+                  >
+                    ✕
+                  </button>
                 </div>
               </div>
 
-              <div className="flex justify-around border-t dark:border-zinc-900 pt-3 text-[9px] font-bold uppercase">
-                <div className="text-center">
-                  <div className="flex items-center space-x-1.5 justify-center">
-                    <span className="w-2 h-2 rounded-full bg-[#5c7cfa]" />
-                    <span className="text-slate-400">Income</span>
-                  </div>
-                  <div className="text-[10px] font-black mt-0.5">
-                    ₹{displayIncome.toLocaleString('en-IN')} ({totalAmt > 0 ? Math.round(incomePct * 100) : 0}%)
-                  </div>
+              {innerPieData.length === 0 ? (
+                <div className="h-48 flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase">
+                  No data logged for this period
                 </div>
+              ) : (
+                <div className="h-56 flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-2 rounded-xl text-[9px] font-bold shadow-md uppercase">
+                                <p className="text-slate-500">{data.parentCategory ? 'Subcategory' : 'Category'}</p>
+                                <p className="text-black dark:text-white text-[10px] font-black mt-0.5">{data.name}</p>
+                                <p className="text-emerald-500 mt-1">₹{data.value.toLocaleString('en-IN')}</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      {/* Inner Pie: Categories */}
+                      <Pie
+                        data={innerPieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={55}
+                        fill="#8884d8"
+                      >
+                        {innerPieData.map((entry: any, index: number) => (
+                          <Cell key={`cell-inner-${index}`} fill={getCategoryColor(entry.name, index)} />
+                        ))}
+                      </Pie>
+                      {/* Outer Pie: Subcategories */}
+                      <Pie
+                        data={outerPieData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={65}
+                        outerRadius={85}
+                        fill="#82ca9d"
+                      >
+                        {outerPieData.map((entry: any, index: number) => {
+                          const parentIdx = innerPieData.findIndex((c: any) => c.name === entry.parentCategory);
+                          const baseColor = getCategoryColor(entry.parentCategory, parentIdx >= 0 ? parentIdx : index);
+                          const alpha = 0.8 - (index % 3) * 0.25;
+                          const fillColor = hexToRgba(baseColor, alpha);
+                          return (
+                            <Cell key={`cell-outer-${index}`} fill={fillColor} />
+                          );
+                        })}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
 
-                <div className="text-center">
-                  <div className="flex items-center space-x-1.5 justify-center">
-                    <span className="w-2 h-2 rounded-full bg-[#e05e5e]" />
-                    <span className="text-slate-400">Expenses</span>
+              {/* Legend with matching subcategories */}
+              <div className="flex flex-wrap gap-2 justify-center border-t dark:border-zinc-900 pt-3 max-h-24 overflow-y-auto scrollbar-none">
+                {innerPieData.map((item: any, idx: number) => (
+                  <div key={item.name} className="flex items-center space-x-1.5 text-[9px] font-bold uppercase">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getCategoryColor(item.name, idx) }} />
+                    <span className="text-slate-500 dark:text-zinc-405">{item.name}</span>
+                    <span className="text-black dark:text-white font-black">₹{item.value.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="text-[10px] font-black mt-0.5">
-                    ₹{displayExpense.toLocaleString('en-IN')} ({totalAmt > 0 ? Math.round(expensePct * 100) : 0}%)
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}

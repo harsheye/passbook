@@ -91,7 +91,7 @@ export class AIService {
       if (nameLower.includes('fit') || nameLower.includes('sport') || nameLower.includes('gym') || nameLower.includes('workout') || nameLower.includes('running') || nameLower.includes('athlete')) return 'Fitness/Sports';
       if (nameLower.includes('fuel') || nameLower.includes('petrol') || nameLower.includes('diesel') || nameLower.includes('gas')) return 'Fuel';
       if (nameLower.includes('gift') || nameLower.includes('donation') || nameLower.includes('charity')) return 'Gifts';
-      if (nameLower.includes('grocer') || nameLower.includes('milk') || nameLower.includes('egg') || nameLower.includes('paneer') || nameLower.includes('vegetable') || nameLower.includes('fruit') || nameLower.includes('bread') || nameLower.includes('butter') || nameLower.includes('cheese') || nameLower.includes('rice') || nameLower.includes('oil') || nameLower.includes('sugar') || nameLower.includes('salt') || nameLower.includes('supermarket') || nameLower.includes('store')) return 'Groceries';
+      if (nameLower.includes('grocer') || nameLower.includes('milk') || nameLower.includes('egg') || nameLower.includes('paneer') || nameLower.includes('panner') || nameLower.includes('vegetable') || nameLower.includes('fruit') || nameLower.includes('bread') || nameLower.includes('butter') || nameLower.includes('cheese') || nameLower.includes('rice') || nameLower.includes('oil') || nameLower.includes('sugar') || nameLower.includes('salt') || nameLower.includes('supermarket') || nameLower.includes('store')) return 'Groceries';
       if (nameLower.includes('health') || nameLower.includes('doctor') || nameLower.includes('hospital') || nameLower.includes('medicine') || nameLower.includes('pharmacy') || nameLower.includes('clinic') || nameLower.includes('medical') || nameLower.includes('dentist')) return 'Healthcare';
       if (nameLower.includes('home') || nameLower.includes('furniture') || nameLower.includes('improvement') || nameLower.includes('repair') || nameLower.includes('appliance') || nameLower.includes('decor')) return 'Home Improvement';
       if (nameLower.includes('loan') || nameLower.includes('emi') || nameLower.includes('debt') || nameLower.includes('mortgage') || nameLower.includes('card payment')) return 'Loan/EMI Payments';
@@ -250,13 +250,13 @@ export class AIService {
 
     // Heuristics for item extraction
     const itemKeywords = [
-      'milk', 'paneer', 'egg', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'chicken', 'apple', 'banana', 'fruit', 
+      'milk', 'paneer', 'panner', 'egg', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'chicken', 'apple', 'banana', 'fruit', 
       'potato', 'onion', 'rice', 'oil', 'sugar', 'salt', 'chips', 'kurkure', 'lays', 'pizza', 'burger', 'coffee', 'tea', 'coke', 
       'shirt', 'pant', 'jeans', 'shoes', 'clothes', 'clothing', 'jacket', 'movie', 'ticket'
     ];
 
     const categoryKeywords: Record<string, string[]> = {
-      'Groceries': ['milk', 'egg', 'paneer', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'grocery', 'groceries', 'fruit', 'apple', 'banana', 'potato', 'onion', 'rice', 'oil', 'sugar', 'salt'],
+      'Groceries': ['milk', 'egg', 'paneer', 'panner', 'carrot', 'carret', 'cornflake', 'oats', 'bread', 'butter', 'cheese', 'grocery', 'groceries', 'fruit', 'apple', 'banana', 'potato', 'onion', 'rice', 'oil', 'sugar', 'salt'],
       'Eating Out/Ordering In': ['pizza', 'burger', 'restaurant', 'swiggy', 'zomato', 'starbucks', 'kfc', 'cafe', 'coffee', 'tea', 'coke'],
       'Entertainment': ['movie', 'netflix', 'cinema', 'spotify', 'entertainment', 'ticket'],
       'Shopping': ['shirt', 'pant', 'jeans', 'shoes', 'clothes', 'clothing', 'jacket']
@@ -269,6 +269,7 @@ export class AIService {
         if (kw === 'carret') displayName = 'Carrot';
         if (kw === 'cornflake') displayName = 'Cornflakes';
         if (kw === 'egg') displayName = 'Eggs';
+        if (kw === 'panner') displayName = 'Paneer';
         foundKeywords.push(displayName);
       }
     });
@@ -293,6 +294,7 @@ export class AIService {
             if (kw === 'carret') displayName = 'Carrot';
             if (kw === 'cornflake') displayName = 'Cornflakes';
             if (kw === 'egg') displayName = 'Eggs';
+            if (kw === 'panner') displayName = 'Paneer';
             itemsForCat.push({ name: displayName, price: splitAmount / 2 });
           }
         });

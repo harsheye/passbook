@@ -14,7 +14,9 @@ import {
   Modal,
   ScrollView,
   KeyboardAvoidingView,
-  Dimensions
+  Dimensions,
+  PanResponder,
+  Animated
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -38,11 +40,12 @@ import {
   CheckIcon,
   TrashIcon,
   PencilIcon,
-  CalendarIcon
+  CalendarIcon,
+  FilterIcon
 } from '../components/SvgIcons';
 import { useTheme } from '../context/ThemeContext';
 
-const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'];
+const FREQUENCIES = ['DAILY', 'WEEKLY', 'MONTHLY'];
 const SCHEDULE_CATEGORIES = [
   'Subscriptions',
   'Rent',
@@ -67,12 +70,40 @@ const getSubscriptionEmoji = (name: string) => {
   return '💳';
 };
 
+const getEffectiveNextRunDate = (item: RecurringTransaction) => {
+  const nextRun = new Date(item.nextRunDate);
+  if (isNaN(nextRun.getTime())) {
+    return new Date(); // Safe fallback
+  }
+  const catName = typeof item.category === 'object' ? (item.category as any).name : item.category;
+  const cat = (catName || '').toLowerCase();
+  const isNecessity = cat.includes('utility') || cat.includes('bill') || cat.includes('rent') || cat.includes('grocer');
+  if (isNecessity) {
+    nextRun.setDate(nextRun.getDate() - 1);
+  }
+  return nextRun;
+};
+
+const getPendingText = (item: RecurringTransaction) => {
+  const catName = typeof item.category === 'object' ? (item.category as any).name : item.category;
+  const cat = (catName || '').toLowerCase();
+  const isNecessity = cat.includes('utility') || cat.includes('bill') || cat.includes('rent') || cat.includes('grocer');
+  if (isNecessity) {
+    const nextRun = new Date(item.nextRunDate);
+    if (isNaN(nextRun.getTime())) {
+      return 'Pending Approval';
+    }
+    const formattedDate = nextRun.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    return `${item.description} on ${formattedDate} today pay or skip`;
+  }
+  return 'Pending Approval';
+};
+
 export const SchedulesScreen: React.FC = () => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { isDark, colors } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
   const { triggerOpenSchedule } = useTab();
-  const { bumpTransactionTick } = useTab();
 
   // Swipe states
   const touchStartX = useRef(0);
@@ -104,11 +135,26 @@ export const SchedulesScreen: React.FC = () => {
   const [schedules, setSchedules] = useState<RecurringTransaction[]>([]);
   const [completedLogs, setCompletedLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-
-  // Custom Filters States
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
+
+  // Filter States (Applied)
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState(''); // 'EXPENSE' or 'INCOME'
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+
+  // Filter Modal States
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [tempSearch, setTempSearch] = useState('');
+  const [tempFilterType, setTempFilterType] = useState('');
+  const [tempCategory, setTempCategory] = useState('');
+  const [tempPaymentMethod, setTempPaymentMethod] = useState('');
+  const [tempMinAmount, setTempMinAmount] = useState('');
+  const [tempMaxAmount, setTempMaxAmount] = useState('');
+  const [modalCategoryDropdownOpen, setModalCategoryDropdownOpen] = useState(false);
+  const [modalPmDropdownOpen, setModalPmDropdownOpen] = useState(false);
 
   // Custom Delete Modal States
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -121,9 +167,61 @@ export const SchedulesScreen: React.FC = () => {
 
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
+  // PanResponders and Animated Values for bottom sheets swipe-down to close
+  const addSheetPanY = useRef(new Animated.Value(0)).current;
+  const filterSheetPanY = useRef(new Animated.Value(0)).current;
+
+  const addSheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_: any, gestureState: any) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          addSheetPanY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          setModalOpen(false);
+          resetForm();
+          addSheetPanY.setValue(0);
+        } else {
+          Animated.spring(addSheetPanY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const filterSheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_: any, gestureState: any) => gestureState.dy > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          filterSheetPanY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          setFilterModalOpen(false);
+          filterSheetPanY.setValue(0);
+        } else {
+          Animated.spring(filterSheetPanY, {
+            toValue: 0,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   useEffect(() => {
     if (triggerOpenSchedule > 0) {
       resetForm();
+      addSheetPanY.setValue(0);
       setModalOpen(true);
     }
   }, [triggerOpenSchedule]);
@@ -156,6 +254,10 @@ export const SchedulesScreen: React.FC = () => {
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [pmDropdownOpen, setPmDropdownOpen] = useState(false);
 
+  // Expanded schedule panel states
+  const [expandedScheduleId, setExpandedScheduleId] = useState<string | null>(null);
+
+
   const showCustomAlert = (title: string, msg: string) => {
     setAlertTitle(title);
     setAlertMessage(msg);
@@ -172,7 +274,8 @@ export const SchedulesScreen: React.FC = () => {
 
       const txs = await api.get('/api/transactions');
       const filteredTxs = (txs.data || []).filter((t: any) =>
-        t.description && t.description.toLowerCase().includes('(recurring)')
+        (t.description && t.description.toLowerCase().includes('(recurring)')) ||
+        (t.note && t.note.toLowerCase().includes('[schedule id:'))
       );
       setCompletedLogs(filteredTxs);
     } catch (err) {
@@ -232,7 +335,6 @@ export const SchedulesScreen: React.FC = () => {
       setModalOpen(false);
       resetForm();
       loadData();
-      try { bumpTransactionTick(); } catch (e) { }
     } catch (err) {
       showCustomAlert('Error', 'Failed to save schedule.');
     } finally {
@@ -261,6 +363,7 @@ export const SchedulesScreen: React.FC = () => {
       setSelectedWeekdays([]);
     }
 
+    addSheetPanY.setValue(0);
     setModalOpen(true);
   };
 
@@ -272,10 +375,7 @@ export const SchedulesScreen: React.FC = () => {
   const handleApprove = async (id: string) => {
     try {
       await approveOccurrenceApi(id);
-      // refresh silently
       loadData();
-      // notify other screens that a new transaction was created via schedule approval
-      try { bumpTransactionTick(); } catch (e) { /* ignore */ }
     } catch (err) {
       showCustomAlert('Error', 'Failed to approve occurrence.');
     }
@@ -284,12 +384,17 @@ export const SchedulesScreen: React.FC = () => {
   const handleSkip = async (id: string) => {
     try {
       await skipOccurrenceApi(id);
-      // refresh silently
       loadData();
-      // notify other screens that schedule was skipped (UI should update)
-      try { bumpTransactionTick(); } catch (e) { /* ignore */ }
     } catch (err) {
       showCustomAlert('Error', 'Failed to skip occurrence.');
+    }
+  };
+
+  const handlePressCard = (id: string) => {
+    if (expandedScheduleId === id) {
+      setExpandedScheduleId(null);
+    } else {
+      setExpandedScheduleId(id);
     }
   };
 
@@ -319,21 +424,82 @@ export const SchedulesScreen: React.FC = () => {
     );
   };
 
+  const openFilterModal = () => {
+    setTempSearch(search);
+    setTempFilterType(filterType);
+    setTempCategory(selectedCategory);
+    setTempPaymentMethod(paymentMethod);
+    setTempMinAmount(minAmount);
+    setTempMaxAmount(maxAmount);
+    setModalCategoryDropdownOpen(false);
+    setModalPmDropdownOpen(false);
+    filterSheetPanY.setValue(0);
+    setFilterModalOpen(true);
+  };
+
+  const applyFilters = () => {
+    setSearch(tempSearch);
+    setFilterType(tempFilterType);
+    setSelectedCategory(tempCategory);
+    setPaymentMethod(tempPaymentMethod);
+    setMinAmount(tempMinAmount);
+    setMaxAmount(tempMaxAmount);
+    setFilterModalOpen(false);
+  };
+
+  const resetFilters = () => {
+    setTempSearch('');
+    setTempFilterType('');
+    setTempCategory('');
+    setTempPaymentMethod('');
+    setTempMinAmount('');
+    setTempMaxAmount('');
+  };
+
   const activeRules = schedules.filter(s => {
     const sStatus = s.status || 'ACTIVE';
     if (sStatus === 'COMPLETED') return false;
 
-    const matchesSearch = s.description.toLowerCase().includes(search.toLowerCase()) ||
-                          s.category.toLowerCase().includes(search.toLowerCase());
+    const sCat = typeof s.category === 'object' ? (s.category as any).name : s.category;
+    const matchesSearch = !search ||
+                          s.description.toLowerCase().includes(search.toLowerCase()) ||
+                          (sCat || '').toLowerCase().includes(search.toLowerCase()) ||
+                          (s.notes && s.notes.toLowerCase().includes(search.toLowerCase()));
     if (!matchesSearch) return false;
 
-    if (selectedCategoryFilter !== 'All') {
-      if (s.category.toLowerCase() !== selectedCategoryFilter.toLowerCase()) return false;
+    if (filterType) {
+      if (s.type.toUpperCase() !== filterType.toUpperCase()) return false;
+    }
+    if (selectedCategory) {
+      if ((sCat || '').toLowerCase() !== selectedCategory.toLowerCase()) return false;
+    }
+    if (paymentMethod) {
+      if (s.paymentMethod.toLowerCase() !== paymentMethod.toLowerCase()) return false;
+    }
+    if (minAmount) {
+      if (s.amount < parseFloat(minAmount)) return false;
+    }
+    if (maxAmount) {
+      if (s.amount > parseFloat(maxAmount)) return false;
     }
     return true;
   });
 
-  const txLogs = completedLogs.map(t => {
+  // Sort active rules: overdue first, then ascending by nextRunDate
+  activeRules.sort((a, b) => {
+    const aEffective = getEffectiveNextRunDate(a);
+    const bEffective = getEffectiveNextRunDate(b);
+    const aDue = aEffective <= new Date();
+    const bDue = bEffective <= new Date();
+
+    if (aDue && !bDue) return -1;
+    if (!aDue && bDue) return 1;
+
+    // Ascending sort by nextRunDate
+    return new Date(a.nextRunDate).getTime() - new Date(b.nextRunDate).getTime();
+  });
+
+  const txLogs: RecurringTransaction[] = completedLogs.map(t => {
     const catName = typeof t.category === 'object' ? t.category.name : t.category;
     return {
       id: t.id,
@@ -345,21 +511,39 @@ export const SchedulesScreen: React.FC = () => {
       nextRunDate: t.transactionDate,
       notes: t.note || '',
       status: 'COMPLETED',
-      isApprovedTx: true
-    };
+      isApprovedTx: true,
+      paymentMethod: t.paymentMethod || 'UPI',
+      account: t.account || 'SBI',
+      startDate: t.transactionDate || new Date().toISOString()
+    } as RecurringTransaction;
   });
 
   const cancelledRules = schedules.filter(s => {
     return s.status === 'COMPLETED';
   });
 
-  const mergedCompletedList = [...cancelledRules, ...txLogs].filter(s => {
-    const matchesSearch = s.description.toLowerCase().includes(search.toLowerCase()) ||
-                          s.category.toLowerCase().includes(search.toLowerCase());
+  const mergedCompletedList = cancelledRules.filter(s => {
+    const sCat = typeof s.category === 'object' ? (s.category as any).name : s.category;
+    const matchesSearch = !search ||
+                          s.description.toLowerCase().includes(search.toLowerCase()) ||
+                          (sCat || '').toLowerCase().includes(search.toLowerCase()) ||
+                          (s.notes && s.notes.toLowerCase().includes(search.toLowerCase()));
     if (!matchesSearch) return false;
 
-    if (selectedCategoryFilter !== 'All') {
-      if (s.category.toLowerCase() !== selectedCategoryFilter.toLowerCase()) return false;
+    if (filterType) {
+      if (s.type.toUpperCase() !== filterType.toUpperCase()) return false;
+    }
+    if (selectedCategory) {
+      if ((sCat || '').toLowerCase() !== selectedCategory.toLowerCase()) return false;
+    }
+    if (paymentMethod) {
+      if (s.paymentMethod.toLowerCase() !== paymentMethod.toLowerCase()) return false;
+    }
+    if (minAmount) {
+      if (s.amount < parseFloat(minAmount)) return false;
+    }
+    if (maxAmount) {
+      if (s.amount > parseFloat(maxAmount)) return false;
     }
     return true;
   });
@@ -367,6 +551,104 @@ export const SchedulesScreen: React.FC = () => {
   mergedCompletedList.sort((a, b) => new Date(b.nextRunDate).getTime() - new Date(a.nextRunDate).getTime());
 
   const filteredSchedules = statusFilter === 'ACTIVE' ? activeRules : mergedCompletedList;
+
+  const renderExpandedPanel = (item: RecurringTransaction) => {
+    const history = completedLogs.filter(t => 
+      (t.note && t.note.includes(item.id)) ||
+      (t.description && t.description.toLowerCase().includes(item.description.toLowerCase()))
+    );
+
+    return (
+      <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, gap: 10 }}>
+        <Text style={{ fontSize: 10, fontWeight: '900', color: colors.text, textTransform: 'uppercase' }}>
+          Payment History
+        </Text>
+
+        {history.length === 0 ? (
+          <Text style={{ fontSize: 9, fontStyle: 'italic', color: colors.subText }}>
+            No past payments recorded for this schedule.
+          </Text>
+        ) : (
+          <View style={{ gap: 6 }}>
+            {history.map((t, idx) => {
+              const payDate = new Date(t.transactionDate || (t as any).date).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric'
+              });
+              return (
+                <View
+                  key={t.id || idx}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    backgroundColor: colors.inputBackground,
+                    borderRadius: 10,
+                    padding: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border
+                  }}
+                >
+                  <View style={{ gap: 2 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: colors.text }}>
+                      {payDate}
+                    </Text>
+                    <Text style={{ fontSize: 7, fontWeight: '700', color: colors.subText, textTransform: 'uppercase' }}>
+                      {t.paymentMethod || 'Direct Debit'}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '900', color: item.type === 'EXPENSE' ? '#f43f5e' : '#10b981' }}>
+                      ₹{Math.abs(t.amount).toLocaleString('en-IN')}
+                    </Text>
+                    {(() => {
+                      const isOverduePaid = t.note && t.note.includes('[Overdue]');
+                      return (
+                        <View style={{ 
+                          backgroundColor: isOverduePaid ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', 
+                          paddingHorizontal: 6, 
+                          paddingVertical: 2, 
+                          borderRadius: 4 
+                        }}>
+                          <Text style={{ 
+                            fontSize: 6, 
+                            fontWeight: '900', 
+                            color: isOverduePaid ? '#ef4444' : '#10b981', 
+                            textTransform: 'uppercase' 
+                          }}>
+                            {isOverduePaid ? 'Overdue Paid' : 'Paid'}
+                          </Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        <TouchableOpacity
+          onPress={() => handleEdit(item)}
+          style={{
+            height: 38,
+            borderRadius: 10,
+            backgroundColor: '#27272a',
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 6
+          }}
+        >
+          <Text style={{ fontSize: 10, fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>
+            View / Edit Details
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
@@ -377,40 +659,31 @@ export const SchedulesScreen: React.FC = () => {
         style={[styles.container, { backgroundColor: colors.background }]}
       >
         
-        {/* HEADER SECTION */}
-        <View style={styles.headerContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>SCHEDULES</Text>
-        </View>
-
-        {/* SEARCH BAR ROW */}
-        <View style={styles.searchRow}>
-          <View style={[styles.searchInputContainer, { flex: 1, backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SearchIcon color={colors.subText} size={14} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.text }]}
-              placeholder="Search schedules..."
-              placeholderTextColor="#71717a"
-              value={search}
-              onChangeText={setSearch}
-            />
+        {/* TOP BAR BRANDING HEADER */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <View>
+            <Text style={[styles.brandTitle, { color: colors.text }]}>SCHEDULES</Text>
           </View>
-          <TouchableOpacity
-            onPress={() => setFilterDropdownOpen(!filterDropdownOpen)}
-            style={[
-              styles.filterToggleBtn,
-              {
-                backgroundColor: filterDropdownOpen ? '#6366f1' : colors.card,
-                borderColor: filterDropdownOpen ? '#6366f1' : colors.border
-              }
-            ]}
-          >
-            <Text style={[styles.filterToggleText, { color: filterDropdownOpen ? '#ffffff' : colors.text }]}>Filters</Text>
-            <ChevronDownIcon color={filterDropdownOpen ? '#ffffff' : colors.subText} size={10} />
-          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {/* Filter Button */}
+            <TouchableOpacity
+              onPress={openFilterModal}
+              style={[
+                styles.headerBtn,
+                {
+                  backgroundColor: (search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#6366f1' : colors.card,
+                  borderColor: (search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#6366f1' : colors.border
+                }
+              ]}
+            >
+              <FilterIcon color={(search || type || selectedCategory || paymentMethod || minAmount || maxAmount) ? '#ffffff' : colors.text} size={16} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ACTIVE / COMPLETED TABS ROW */}
-        <View style={styles.statusTabsRow}>
+        <View style={[styles.statusTabsRow, { marginTop: 12 }]}>
           <TouchableOpacity
             onPress={() => setStatusFilter('ACTIVE')}
             style={[
@@ -439,34 +712,6 @@ export const SchedulesScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {/* FILTERS DROPDOWN BOX */}
-        {filterDropdownOpen && (
-          <View style={[styles.filterDropdownList, { backgroundColor: colors.card, borderColor: colors.border, zIndex: 1000 }]}>
-            {['All', ...SCHEDULE_CATEGORIES].map(cat => {
-              const isSelected = selectedCategoryFilter === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => {
-                    setSelectedCategoryFilter(cat);
-                    setFilterDropdownOpen(false);
-                  }}
-                  style={[
-                    styles.filterDropdownItem,
-                    { borderBottomColor: colors.border },
-                    isSelected && { backgroundColor: 'rgba(99, 102, 241, 0.15)' }
-                  ]}
-                >
-                  <Text style={[styles.filterDropdownItemText, { color: colors.text }, isSelected && { color: '#6366f1', fontWeight: '900' }]}>
-                    {cat}
-                  </Text>
-                  {isSelected && <Text style={{ color: '#6366f1', fontSize: 10 }}>✓</Text>}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
         {/* LOG FEED */}
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -486,7 +731,7 @@ export const SchedulesScreen: React.FC = () => {
               const isExpense = item.type.toUpperCase() === 'EXPENSE';
               const freqText = item.frequency.toLowerCase();
               const cycleText = freqText === 'daily' ? 'day' : freqText === 'weekly' ? 'week' : 'month';
-              const isDue = new Date(item.nextRunDate) <= new Date() && (item.status || 'ACTIVE') !== 'COMPLETED';
+              const isDue = getEffectiveNextRunDate(item) <= new Date() && (item.status || 'ACTIVE') !== 'COMPLETED';
               const isCompleted = item.status === 'COMPLETED';
               const cardBorderLeftColor = isCompleted ? '#71717a' : (isExpense ? '#f43f5e' : '#10b981');
               const cardOpacity = isCompleted ? 0.7 : 1;
@@ -496,9 +741,7 @@ export const SchedulesScreen: React.FC = () => {
 
               if (isSubscription) {
                 return (
-                  <TouchableOpacity
-                    onPress={() => !isCompleted && handleEdit(item as any)}
-                    activeOpacity={isCompleted ? 1 : 0.7}
+                  <View
                     style={[
                       styles.productTile,
                       {
@@ -510,7 +753,11 @@ export const SchedulesScreen: React.FC = () => {
                   >
                     <View style={[styles.productTileStripe, { backgroundColor: cardBorderLeftColor }]} />
                     
-                    <View style={styles.productTileMain}>
+                    <TouchableOpacity
+                      activeOpacity={isCompleted ? 1 : 0.7}
+                      onPress={() => !isCompleted && handlePressCard(item.id)}
+                      style={styles.productTileMain}
+                    >
                       <View style={[styles.productLogoContainer, { backgroundColor: colors.inputBackground }]}>
                         <Text style={styles.productEmoji}>{emoji}</Text>
                       </View>
@@ -532,7 +779,7 @@ export const SchedulesScreen: React.FC = () => {
                         </Text>
                         <Text style={[styles.productCycle, { color: colors.subText }]}>per {cycleText}</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                     
                     <View style={styles.productTileFooter}>
                       {!isCompleted ? (
@@ -550,10 +797,10 @@ export const SchedulesScreen: React.FC = () => {
                     </View>
 
                     {isDue ? (
-                      <View style={[styles.pendingContainer, { borderTopColor: colors.border, marginTop: 12, paddingHorizontal: 12, paddingBottom: 12 }]}>
+                      <View style={[styles.pendingContainer, { borderTopColor: colors.border, marginTop: 12 }]}>
                         <View style={styles.pendingIndicator}>
                           <View style={styles.pulseDot} />
-                          <Text style={[styles.pendingText, { color: colors.subText }]}>Pending Approval</Text>
+                          <Text style={[styles.pendingText, { color: colors.subText }]}>{getPendingText(item)}</Text>
                         </View>
                         <View style={styles.pendingActionRow}>
                           <TouchableOpacity
@@ -571,14 +818,14 @@ export const SchedulesScreen: React.FC = () => {
                         </View>
                       </View>
                     ) : null}
-                  </TouchableOpacity>
+
+                    {expandedScheduleId === item.id ? renderExpandedPanel(item) : null}
+                  </View>
                 );
               }
 
               return (
-                  <TouchableOpacity
-                   onPress={() => !isCompleted && handleEdit(item as any)}
-                   activeOpacity={isCompleted ? 1 : 0.7}
+                <View
                   style={[
                     styles.card,
                     {
@@ -589,7 +836,11 @@ export const SchedulesScreen: React.FC = () => {
                     }
                   ]}
                 >
-                  <View style={styles.cardHeader}>
+                  <TouchableOpacity
+                    activeOpacity={isCompleted ? 1 : 0.7}
+                    onPress={() => !isCompleted && handlePressCard(item.id)}
+                    style={styles.cardHeader}
+                  >
                     <View style={styles.cardHeaderLeft}>
                       <View style={styles.cardMeta}>
                         <Text style={[styles.cardDateText, { color: colors.subText }]}>
@@ -600,7 +851,9 @@ export const SchedulesScreen: React.FC = () => {
                             {item.frequency} {item.frequency === 'DAILY' && (item as any).tags ? `(${(item as any).tags})` : ''}
                           </Text>
                         </View>
-                        <Text style={[styles.cardCategoryText, { color: colors.subText }]}>{item.category}</Text>
+                        <Text style={[styles.cardCategoryText, { color: colors.subText }]}>
+                          {typeof item.category === 'object' ? (item.category as any).name : item.category}
+                        </Text>
                       </View>
                       <Text style={[styles.cardTitle, { color: colors.text }]}>{item.description}</Text>
                       {item.notes ? (
@@ -629,14 +882,14 @@ export const SchedulesScreen: React.FC = () => {
                         </View>
                       )}
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Approve / Skip occurrences pending check */}
                   {isDue ? (
                     <View style={[styles.pendingContainer, { borderTopColor: colors.border }]}>
                       <View style={styles.pendingIndicator}>
                         <View style={styles.pulseDot} />
-                        <Text style={[styles.pendingText, { color: colors.subText }]}>Pending Approval</Text>
+                        <Text style={[styles.pendingText, { color: colors.subText }]}>{getPendingText(item)}</Text>
                       </View>
                       <View style={styles.pendingActionRow}>
                         <TouchableOpacity
@@ -654,7 +907,9 @@ export const SchedulesScreen: React.FC = () => {
                       </View>
                     </View>
                   ) : null}
-                </TouchableOpacity>
+
+                  {expandedScheduleId === item.id ? renderExpandedPanel(item) : null}
+                </View>
               );
             }}
           />
@@ -693,9 +948,7 @@ export const SchedulesScreen: React.FC = () => {
                         await deleteScheduleApi(idToDelete);
                         setDeleteModalOpen(false);
                         setIdToDelete(null);
-                        // refresh silently
                         loadData();
-                        try { bumpTransactionTick(); } catch (e) { }
                       } catch (err) {
                         showCustomAlert('Error', 'Failed to cancel schedule.');
                       }
@@ -720,12 +973,25 @@ export const SchedulesScreen: React.FC = () => {
             resetForm();
           }}
         >
-          <View style={styles.modalOverlay}>
+          <View style={styles.bottomSheetOverlay}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
               style={styles.keyboardView}
             >
-              <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Animated.View 
+                style={[
+                  styles.modalCard, 
+                  { 
+                    backgroundColor: colors.card, 
+                    borderColor: colors.border,
+                    transform: [{ translateY: addSheetPanY }]
+                  }
+                ]}
+              >
+                {/* Drag Handle Bar */}
+                <View {...addSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
+                  <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+                </View>
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalHeaderTitle, { color: colors.text }]}>
                     {editingSchedule ? 'EDIT REPETITION RULE' : 'NEW REPETITION RULE'}
@@ -796,25 +1062,30 @@ export const SchedulesScreen: React.FC = () => {
                   <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Billing Frequency</Text>
                     <View style={[styles.segmentedRow, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
-                      {FREQUENCIES.map(f => (
-                        <TouchableOpacity
-                          key={f}
-                          onPress={() => setFrequency(f)}
-                          style={[
-                            styles.segmentedBtn,
-                            frequency === f && styles.segmentedBtnActiveDefault
-                          ]}
-                        >
-                          <Text
+                      {FREQUENCIES.map(f => {
+                        const isFreqDisabled = editingSchedule !== null && (f === 'DAILY' || f === 'WEEKLY');
+                        return (
+                          <TouchableOpacity
+                            key={f}
+                            disabled={isFreqDisabled}
+                            onPress={() => setFrequency(f)}
                             style={[
-                              styles.segmentedText,
-                              frequency === f ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
+                              styles.segmentedBtn,
+                              frequency === f && styles.segmentedBtnActiveDefault,
+                              isFreqDisabled && { opacity: 0.3 }
                             ]}
                           >
-                            {f}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                            <Text
+                              style={[
+                                styles.segmentedText,
+                                frequency === f ? { color: '#ffffff', fontWeight: '900' } : { color: colors.subText }
+                              ]}
+                            >
+                              {f}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
 
@@ -912,18 +1183,24 @@ export const SchedulesScreen: React.FC = () => {
                     </View>
                   </View>
 
-                  {/* Category select row */}
-                  <View style={[styles.formGroup, { zIndex: 110 }]}>
+                  {/* Category Dropdown Selector */}
+                  <View style={{ marginBottom: 12, zIndex: 100 }}>
                     <Text style={styles.formLabel}>Category</Text>
                     <TouchableOpacity
-                      onPress={() => setCatDropdownOpen(!catDropdownOpen)}
+                      onPress={() => {
+                        setCatDropdownOpen(!catDropdownOpen);
+                        setFreqDropdownOpen(false);
+                        setPmDropdownOpen(false);
+                      }}
                       style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
                     >
-                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>{category || 'Select Category'}</Text>
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
+                        {category || 'Select Category'}
+                      </Text>
                       <ChevronDownIcon color={colors.subText} size={12} />
                     </TouchableOpacity>
-                    {catDropdownOpen ? (
-                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border, zIndex: 120 }]}>
+                    {catDropdownOpen && (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
                         <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
                           {SCHEDULE_CATEGORIES.map(c => (
                             <TouchableOpacity
@@ -939,7 +1216,7 @@ export const SchedulesScreen: React.FC = () => {
                           ))}
                         </ScrollView>
                       </View>
-                    ) : null}
+                    )}
                   </View>
 
                   {/* Account select row */}
@@ -977,7 +1254,7 @@ export const SchedulesScreen: React.FC = () => {
                   </View>
 
                   {/* Payment Method */}
-                  <View style={[styles.formGroup, pmDropdownOpen ? { zIndex: 100 } : null]}>
+                  <View style={styles.formGroup}>
                     <Text style={styles.formLabel}>Payment Method</Text>
                     <TouchableOpacity
                       onPress={() => setPmDropdownOpen(!pmDropdownOpen)}
@@ -1044,8 +1321,37 @@ export const SchedulesScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                 )}
-              </View>
+              </Animated.View>
             </KeyboardAvoidingView>
+          </View>
+        </Modal>
+
+        {/* SUCCESS MODAL */}
+        <Modal
+          visible={successModalVisible}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => {}}
+        >
+          <View style={styles.popupOverlay}>
+            <View style={[styles.popupCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: 'center' }]}>
+              <View style={styles.successCircle}>
+                <Text style={{ fontSize: 24, color: '#ffffff' }}>✓</Text>
+              </View>
+              <Text style={[styles.popupTitle, { color: colors.text, marginTop: 16 }]}>Success</Text>
+              <Text style={[styles.popupBody, { color: colors.subText, textAlign: 'center' }]}>
+                {successModalMessage}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSuccessModalVisible(false);
+                  loadData();
+                }}
+                style={styles.successBtn}
+              >
+                <Text style={styles.successBtnText}>Awesome</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Modal>
 
@@ -1072,6 +1378,208 @@ export const SchedulesScreen: React.FC = () => {
           </View>
         </Modal>
 
+        {/* FILTER MODAL */}
+        <Modal
+          visible={filterModalOpen}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setFilterModalOpen(false)}
+        >
+          <View style={styles.bottomSheetOverlay}>
+            <Animated.View 
+              style={[
+                styles.filterModalSheet, 
+                { 
+                  backgroundColor: colors.card, 
+                  borderTopColor: colors.border, 
+                  borderWidth: 1,
+                  transform: [{ translateY: filterSheetPanY }]
+                }
+              ]}
+            >
+              {/* Drag Handle Bar */}
+              <View {...filterSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
+                <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+              </View>
+              <View style={styles.filterModalHeader}>
+                <Text style={[styles.filterModalTitle, { color: colors.text }]}>FILTER SCHEDULES</Text>
+                <TouchableOpacity
+                  onPress={() => setFilterModalOpen(false)}
+                  style={styles.filterModalCloseBtn}
+                >
+                  <Text style={[styles.filterModalCloseText, { color: colors.subText }]}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+                <View style={{ gap: 16 }}>
+                  
+                  {/* Search query */}
+                  <View>
+                    <Text style={styles.formLabel}>Search Description / Category / Notes</Text>
+                    <View style={[styles.filterModalInputContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+                      <SearchIcon color={colors.subText} size={14} />
+                      <TextInput
+                        style={[styles.filterModalTextInput, { color: colors.text }]}
+                        placeholder="e.g. Netflix, Rent, Electricity"
+                        placeholderTextColor={colors.subText}
+                        value={tempSearch}
+                        onChangeText={setTempSearch}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Transaction Type */}
+                  <View>
+                    <Text style={styles.formLabel}>Transaction Type</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                      {['All', 'Income', 'Expense'].map(t => {
+                        const label = t === 'All' ? '' : t;
+                        const isSelected = tempFilterType.toUpperCase() === label.toUpperCase();
+                        return (
+                          <TouchableOpacity
+                            key={t}
+                            onPress={() => setTempFilterType(label)}
+                            style={[
+                              styles.typeFilterBtn,
+                              {
+                                backgroundColor: isSelected ? '#6366f1' : colors.inputBackground,
+                                borderColor: isSelected ? '#6366f1' : colors.border
+                              }
+                            ]}
+                          >
+                            <Text style={[styles.typeFilterText, { color: isSelected ? '#ffffff' : colors.text }]}>{t}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Category Dropdown */}
+                  <View style={{ zIndex: 120 }}>
+                    <Text style={styles.formLabel}>Category</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setModalCategoryDropdownOpen(!modalCategoryDropdownOpen);
+                        setModalPmDropdownOpen(false);
+                      }}
+                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
+                        {tempCategory || 'All Categories'}
+                      </Text>
+                      <ChevronDownIcon color={colors.subText} size={12} />
+                    </TouchableOpacity>
+                    {modalCategoryDropdownOpen && (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {['All', ...SCHEDULE_CATEGORIES].map(c => {
+                            const label = c === 'All' ? '' : c;
+                            return (
+                              <TouchableOpacity
+                                key={c}
+                                onPress={() => {
+                                  setTempCategory(label);
+                                  setModalCategoryDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{c}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Payment Method Dropdown */}
+                  <View style={{ zIndex: 110 }}>
+                    <Text style={styles.formLabel}>Payment Method</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setModalPmDropdownOpen(!modalPmDropdownOpen);
+                        setModalCategoryDropdownOpen(false);
+                      }}
+                      style={[styles.modalDropdown, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                    >
+                      <Text style={[styles.modalDropdownText, { color: colors.text }]}>
+                        {tempPaymentMethod || 'All Payment Methods'}
+                      </Text>
+                      <ChevronDownIcon color={colors.subText} size={12} />
+                    </TouchableOpacity>
+                    {modalPmDropdownOpen && (
+                      <View style={[styles.modalMenu, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+                          {['All', ...PAYMENT_METHODS].map(pm => {
+                            const label = pm === 'All' ? '' : pm;
+                            return (
+                              <TouchableOpacity
+                                key={pm}
+                                onPress={() => {
+                                  setTempPaymentMethod(label);
+                                  setModalPmDropdownOpen(false);
+                                }}
+                                style={[styles.modalMenuItem, { borderBottomColor: colors.border }]}
+                              >
+                                <Text style={[styles.modalMenuText, { color: colors.text }]}>{pm}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Amount Range */}
+                  <View>
+                    <Text style={styles.formLabel}>Amount Range (₹)</Text>
+                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={[styles.rangeInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                          placeholder="Min"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          value={tempMinAmount}
+                          onChangeText={setTempMinAmount}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={[styles.rangeInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+                          placeholder="Max"
+                          placeholderTextColor={colors.subText}
+                          keyboardType="numeric"
+                          value={tempMaxAmount}
+                          onChangeText={setTempMaxAmount}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Actions */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
+                    <TouchableOpacity
+                      onPress={resetFilters}
+                      style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]}
+                    >
+                      <Text style={{ color: colors.text, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Reset</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={applyFilters}
+                      style={[styles.actionBtn, { backgroundColor: '#6366f1' }]}
+                    >
+                      <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Apply Filters</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                </View>
+              </ScrollView>
+            </Animated.View>
+          </View>
+        </Modal>
+
       </View>
     </SafeAreaView>
   );
@@ -1085,7 +1593,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerContainer: {
-    paddingTop: Platform.OS === 'android' ? 24 : 18,
+    paddingTop: Platform.OS === 'android' ? 48 : 36,
     paddingBottom: 8,
     paddingHorizontal: 16,
   },
@@ -1176,7 +1684,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 80,
+    paddingBottom: 130,
   },
   card: {
     backgroundColor: '#18181b',
@@ -1276,9 +1784,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#27272a',
     borderStyle: 'dashed',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   pendingIndicator: {
     flexDirection: 'row',
@@ -1286,44 +1793,58 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   pulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#d97706',
   },
   pendingText: {
-    fontSize: 10,
+    fontSize: 8,
     fontWeight: '800',
     color: '#d97706',
     textTransform: 'uppercase',
   },
   pendingActionRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
+    marginTop: 10,
+    width: '100%',
   },
   skipBtn: {
     backgroundColor: '#27272a',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   skipBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#a1a1aa',
+    color: '#ffffff',
     textTransform: 'uppercase',
   },
   approveBtn: {
     backgroundColor: '#10b981',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 12,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   approveBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '900',
     color: '#000000',
     textTransform: 'uppercase',
+  },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -1549,12 +2070,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalMenu: {
+    position: 'absolute',
+    top: 48,
+    left: 0,
     width: '100%',
     backgroundColor: '#18181b',
     borderWidth: 1,
     borderColor: '#27272a',
     borderRadius: 10,
-    marginTop: 4,
+    zIndex: 100,
   },
   modalMenuItem: {
     paddingHorizontal: 12,
@@ -1788,5 +2312,90 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#f43f5e',
     textTransform: 'uppercase',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? 24 : 18,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  brandTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  headerBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterModalSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    maxHeight: '85%',
+    width: '100%',
+    maxWidth: 360,
+    flexShrink: 1,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  filterModalTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  filterModalCloseBtn: {
+    padding: 4,
+  },
+  filterModalCloseText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  filterModalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+    height: 42,
+  },
+  filterModalTextInput: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    height: '100%',
+  },
+  typeFilterBtn: {
+    flex: 1,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  typeFilterText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  rangeInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    fontSize: 11.5,
+    fontWeight: '700',
   },
 });

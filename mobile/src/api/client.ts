@@ -29,7 +29,7 @@ export const api = {
 
       let filtered = txs.filter(t => {
         const typeUpper = (t.transactionType || '').toUpperCase();
-        const catName = typeof t.category === 'object' ? t.category.name : t.category;
+        const catName = (t.category && typeof t.category === 'object') ? (t.category as any).name : t.category;
         const catUpper = (catName || '').toUpperCase();
 
         if (!isAdmin) {
@@ -51,7 +51,7 @@ export const api = {
           (t.description || '').toLowerCase().includes(q) ||
           (t.merchantName || '').toLowerCase().includes(q) ||
           (t.note || '').toLowerCase().includes(q) ||
-          (typeof t.category === 'object' ? t.category.name : t.category || '').toLowerCase().includes(q)
+          ((t.category && typeof t.category === 'object') ? (t.category as any).name : t.category || '').toLowerCase().includes(q)
         );
       }
 
@@ -70,7 +70,7 @@ export const api = {
 
       const filtered = txs.filter(t => {
         const typeUpper = (t.transactionType || '').toUpperCase();
-        const catName = typeof t.category === 'object' ? t.category.name : t.category;
+        const catName = (t.category && typeof t.category === 'object') ? (t.category as any).name : t.category;
         const catUpper = (catName || '').toUpperCase();
 
         if (!isAdmin) {
@@ -105,7 +105,7 @@ export const api = {
       currentTxns.forEach(t => {
         const amt = t.amount;
         const type = (t.transactionType || '').toUpperCase();
-        const catName = typeof t.category === 'object' ? t.category.name : t.category;
+        const catName = (t.category && typeof t.category === 'object') ? (t.category as any).name : t.category;
 
         if (type === 'INCOME') {
           totalIncome += amt;
@@ -238,7 +238,7 @@ export const api = {
 
       txs.forEach(t => {
         const type = (t.transactionType || '').toUpperCase();
-        const catName = typeof t.category === 'object' ? t.category.name : t.category;
+        const catName = (t.category && typeof t.category === 'object') ? (t.category as any).name : t.category;
         const catLower = (catName || '').toLowerCase();
 
         if (type === 'INCOME') {
@@ -548,7 +548,7 @@ CRITICAL INSTRUCTIONS:
 
     if (path.startsWith('/api/transactions')) {
       const txs = await getStoredTransactions();
-      const categoryObj = typeof data.category === 'object' ? data.category : { name: data.category, icon: 'tag', color: '#71717a' };
+      const categoryObj = (data.category && typeof data.category === 'object') ? data.category : { name: data.category || '', icon: 'tag', color: '#71717a' };
       const newTx: Transaction = {
         id: 'tx_' + Date.now(),
         transactionDate: data.date || new Date().toISOString(),
@@ -590,7 +590,7 @@ CRITICAL INSTRUCTIONS:
             accountId: sched.account,
             account: sched.account,
             description: `${sched.description} (Recurring)`,
-            note: sched.notes || 'Approved recurring transaction',
+            note: `${sched.notes ? sched.notes + ' ' : ''}[Schedule ID: ${sched.id}] Approved recurring transaction`.trim(),
             favorite: false
           };
           txs.push(newTx);
@@ -669,7 +669,7 @@ CRITICAL INSTRUCTIONS:
       const id = getIdFromUrl(path, '/api/transactions/');
       const idx = txs.findIndex(t => t.id === id);
       if (idx !== -1) {
-        const categoryObj = typeof data.category === 'object' ? data.category : { name: data.category };
+        const categoryObj = (data.category && typeof data.category === 'object') ? data.category : { name: data.category || '' };
         txs[idx] = {
           ...txs[idx],
           transactionDate: data.date || data.transactionDate || txs[idx].transactionDate,

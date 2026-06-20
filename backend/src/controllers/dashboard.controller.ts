@@ -4,6 +4,56 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 
 const prisma = new PrismaClient();
 
+const getAutoSubcategory = (categoryName: string, description: string = ''): string => {
+  const cat = categoryName.toLowerCase();
+  const desc = description.toLowerCase();
+
+  if (cat.includes('utility') || cat.includes('bill')) {
+    if (desc.includes('electric') || desc.includes('power') || desc.includes('bescom') || desc.includes('light')) return 'Electricity';
+    if (desc.includes('water') || desc.includes('sewer') || desc.includes('bwssb')) return 'Water';
+    if (desc.includes('gas') || desc.includes('cylinder') || desc.includes('indane') || desc.includes('hp')) return 'Gas';
+    if (desc.includes('internet') || desc.includes('wifi') || desc.includes('broadband') || desc.includes('recharge') || desc.includes('jio') || desc.includes('airtel') || desc.includes('phone') || desc.includes('mobile')) return 'Internet/Phone';
+    return 'Other Bills';
+  }
+
+  if (cat.includes('grocer')) {
+    if (desc.includes('milk') || desc.includes('dairy') || desc.includes('curd') || desc.includes('paneer')) return 'Milk & Dairy';
+    if (desc.includes('veg') || desc.includes('fruit') || desc.includes('sabzi') || desc.includes('tomato') || desc.includes('onion')) return 'Fruits & Veggies';
+    if (desc.includes('meat') || desc.includes('chicken') || desc.includes('fish') || desc.includes('egg')) return 'Meat & Eggs';
+    if (desc.includes('dmart') || desc.includes('blinkit') || desc.includes('instamart') || desc.includes('zepto') || desc.includes('market') || desc.includes('grocery')) return 'Household Essentials';
+    return 'Other Groceries';
+  }
+
+  if (cat.includes('eat') || cat.includes('order') || cat.includes('dine') || cat.includes('restaurant')) {
+    if (desc.includes('zomato') || desc.includes('swiggy')) return 'Food Delivery';
+    if (desc.includes('pizza') || desc.includes('burger') || desc.includes('mcdonald') || desc.includes('kfc') || desc.includes('cafe') || desc.includes('restaurant')) return 'Dining Out';
+    return 'Dining';
+  }
+
+  if (cat.includes('sub')) {
+    if (desc.includes('netflix') || desc.includes('prime') || desc.includes('hotstar') || desc.includes('youtube')) return 'Video Subscriptions';
+    if (desc.includes('spotify') || desc.includes('music') || desc.includes('apple')) return 'Audio Subscriptions';
+    return 'Other Subscriptions';
+  }
+
+  if (cat.includes('travel') || cat.includes('fuel')) {
+    if (desc.includes('uber') || desc.includes('ola') || desc.includes('auto') || desc.includes('cab') || desc.includes('taxi')) return 'Ride Hailing';
+    if (desc.includes('metro') || desc.includes('train') || desc.includes('bus') || desc.includes('flight') || desc.includes('ticket')) return 'Public Transport';
+    if (desc.includes('fuel') || desc.includes('petrol') || desc.includes('diesel')) return 'Fuel';
+    return 'Other Travel';
+  }
+
+  if (cat.includes('rent')) {
+    return 'House Rent';
+  }
+
+  if (cat.includes('gambling')) {
+    return 'Sports Betting/Casino';
+  }
+
+  return categoryName + ' General';
+};
+
 export class DashboardController {
   
   /**
@@ -46,19 +96,26 @@ export class DashboardController {
       let totalExpenses = 0;
       const categorySpent: Record<string, number> = {};
       const categoryIncome: Record<string, number> = {};
+      const categorySubcategorySpent: Record<string, Record<string, number>> = {};
+      const categorySubcategoryIncome: Record<string, Record<string, number>> = {};
 
       currentTxns.forEach(t => {
         const amt = t.amount;
         const type = t.transactionType.toUpperCase();
         const catName = t.category.name;
+        const subcatName = getAutoSubcategory(catName, t.description || '');
 
         if (type === 'INCOME') {
           totalIncome += amt;
           categoryIncome[catName] = (categoryIncome[catName] || 0) + amt;
+          if (!categorySubcategoryIncome[catName]) categorySubcategoryIncome[catName] = {};
+          categorySubcategoryIncome[catName][subcatName] = (categorySubcategoryIncome[catName][subcatName] || 0) + amt;
         } else if (type === 'EXPENSE' || type === 'GAMBLING') {
           const absAmt = Math.abs(amt);
           totalExpenses += absAmt;
           categorySpent[catName] = (categorySpent[catName] || 0) + absAmt;
+          if (!categorySubcategorySpent[catName]) categorySubcategorySpent[catName] = {};
+          categorySubcategorySpent[catName][subcatName] = (categorySubcategorySpent[catName][subcatName] || 0) + absAmt;
         }
       });
 
@@ -197,6 +254,31 @@ export class DashboardController {
         value: categoryIncome[cat]
       }));
 
+      // Grouped subcategories for nested Pie Chart outer ring
+      const chartSubcategory: any[] = [];
+      Object.keys(categorySubcategorySpent).forEach(cat => {
+        const subcats = categorySubcategorySpent[cat];
+        Object.keys(subcats).forEach(subcat => {
+          chartSubcategory.push({
+            name: subcat,
+            parentCategory: cat,
+            value: subcats[subcat]
+          });
+        });
+      });
+
+      const chartSubcategoryIncome: any[] = [];
+      Object.keys(categorySubcategoryIncome).forEach(cat => {
+        const subcats = categorySubcategoryIncome[cat];
+        Object.keys(subcats).forEach(subcat => {
+          chartSubcategoryIncome.push({
+            name: subcat,
+            parentCategory: cat,
+            value: subcats[subcat]
+          });
+        });
+      });
+
       // Combined Daily Spending Heatmap (current month days)
       const chartDaily: any[] = [];
       const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
@@ -231,6 +313,8 @@ export class DashboardController {
           monthly: chartMonthly,
           category: chartCategory,
           categoryIncome: chartCategoryIncome,
+          subcategory: chartSubcategory,
+          subcategoryIncome: chartSubcategoryIncome,
           daily: chartDaily
         }
       });
