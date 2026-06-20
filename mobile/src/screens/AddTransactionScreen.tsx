@@ -638,18 +638,17 @@ export const AddTransactionScreen: React.FC = () => {
           >
             {/* Drag Handle Bar */}
             <View {...catSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
-              <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
             </View>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16, paddingHorizontal: 16 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center' }}>
                 {isCreatingCustomCategory ? 'CREATE CATEGORY' : 'SELECT CATEGORY'}
               </Text>
-              <TouchableOpacity
-                onPress={() => setCategorySheetVisible(false)}
-                style={styles.modalCloseBtn}
-              >
-                <Text style={[styles.modalCloseText, { color: colors.subText }]}>✕</Text>
-              </TouchableOpacity>
+              <Text style={{ fontSize: 11, color: colors.subText, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
+                {isCreatingCustomCategory 
+                  ? 'Define a new custom category for your transactions.' 
+                  : 'Choose a category to classify this transaction.'}
+              </Text>
             </View>
 
             {isCreatingCustomCategory ? (

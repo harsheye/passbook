@@ -1631,17 +1631,17 @@ export const ChatScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: colors.card, borderTopColor: colors.border, borderWidth: 1 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>SELECT CATEGORY</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setCategorySheetVisible(false);
-                  setActiveMessageIdForCategory(null);
-                }}
-                style={styles.modalCloseBtn}
-              >
-                <Text style={[styles.modalCloseText, { color: colors.subText }]}>✕</Text>
-              </TouchableOpacity>
+            {/* Drag Handle Bar */}
+            <View style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
+            </View>
+            <View style={{ alignItems: 'center', marginBottom: 16, paddingHorizontal: 16 }}>
+              <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center' }}>
+                SELECT CATEGORY
+              </Text>
+              <Text style={{ fontSize: 11, color: colors.subText, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
+                Choose a category for this transaction to refine AI tracking.
+              </Text>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>

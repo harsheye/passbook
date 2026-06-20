@@ -1112,25 +1112,26 @@ export const SchedulesScreen: React.FC = () => {
             resetForm();
           }}
         >
-          <View style={styles.bottomSheetOverlay}>
+          <View style={{
+            flex: 1,
+            backgroundColor: isDark ? '#09090b' : '#f4f5fa',
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 20
+          }}>
             <KeyboardAvoidingView
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.keyboardView}
+              style={{
+                width: '100%',
+                maxWidth: 360
+              }}
             >
               {/* Card Header outside/above the card */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
-                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {editingSchedule ? 'EDIT REPETITION RULE' : 'NEW REPETITION RULE'}
+              <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+                <Text style={{ fontSize: 10, fontWeight: '900', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  {editingSchedule ? 'EDIT ENTRY' : 'NEW ENTRY'}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    setModalOpen(false);
-                    resetForm();
-                  }}
-                  style={{ padding: 4 }}
-                >
-                  <Text style={{ color: colors.subText, fontSize: 12, fontWeight: 'bold' }}>✕</Text>
-                </TouchableOpacity>
               </View>
 
               {/* Main Card View (White background, left accent border) */}
@@ -1147,8 +1148,7 @@ export const SchedulesScreen: React.FC = () => {
                     borderBottomWidth: 1,
                     padding: 20,
                     borderRadius: 24,
-                    maxHeight: 520,
-                    transform: [{ translateY: addSheetPanY }]
+                    maxHeight: 520
                   }
                 ]}
               >
@@ -1571,7 +1571,7 @@ export const SchedulesScreen: React.FC = () => {
                       justifyContent: 'center'
                     }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '900', color: isDark ? '#000000' : '#ffffff', textTransform: 'uppercase' }}>Save Rule</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: isDark ? '#000000' : '#ffffff', textTransform: 'uppercase' }}>Save Entry</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1652,16 +1652,15 @@ export const SchedulesScreen: React.FC = () => {
             >
               {/* Drag Handle Bar */}
               <View {...filterSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
-                <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
               </View>
-              <View style={styles.filterModalHeader}>
-                <Text style={[styles.filterModalTitle, { color: colors.text }]}>FILTER SCHEDULES</Text>
-                <TouchableOpacity
-                  onPress={() => setFilterModalOpen(false)}
-                  style={styles.filterModalCloseBtn}
-                >
-                  <Text style={[styles.filterModalCloseText, { color: colors.subText }]}>✕</Text>
-                </TouchableOpacity>
+              <View style={{ alignItems: 'center', marginBottom: 16, paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center', letterSpacing: 0.5 }}>
+                  FILTER SCHEDULES
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.subText, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
+                  Refine your recurring rules by search, type, category, or amount range.
+                </Text>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>

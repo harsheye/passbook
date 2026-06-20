@@ -737,16 +737,15 @@ export const TransactionsScreen: React.FC = () => {
             >
               {/* Drag Handle Bar */}
               <View {...filterSheetPanResponder.panHandlers} style={{ paddingVertical: 8, width: '100%', alignItems: 'center' }}>
-                <View style={{ width: 40, height: 5, borderRadius: 2.5, backgroundColor: colors.border }} />
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: colors.border }} />
               </View>
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.text }]}>FILTER TRANSACTIONS</Text>
-                <TouchableOpacity
-                  onPress={() => setFilterModalOpen(false)}
-                  style={styles.modalCloseBtn}
-                >
-                  <Text style={[styles.modalCloseText, { color: colors.subText }]}>✕</Text>
-                </TouchableOpacity>
+              <View style={{ alignItems: 'center', marginBottom: 16, paddingHorizontal: 16 }}>
+                <Text style={{ fontSize: 15, fontWeight: '600', color: colors.text, textAlign: 'center', letterSpacing: 0.5 }}>
+                  FILTER TRANSACTIONS
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.subText, textAlign: 'center', marginTop: 4, lineHeight: 16 }}>
+                  Filter transaction logs by search, transaction type, category, or payment method.
+                </Text>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
@@ -895,25 +894,40 @@ export const TransactionsScreen: React.FC = () => {
                       </View>
                     </View>
                   </View>
-
-                  {/* Actions */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
-                    <TouchableOpacity
-                      onPress={resetFilters}
-                      style={[styles.actionBtn, { borderColor: colors.border, borderWidth: 1 }]}
-                    >
-                      <Text style={{ color: colors.text, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Reset</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={applyFilters}
-                      style={[styles.actionBtn, { backgroundColor: '#6366f1' }]}
-                    >
-                      <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' }}>Apply Filters</Text>
-                    </TouchableOpacity>
-                  </View>
-
                 </View>
               </ScrollView>
+
+              {/* Actions sticky at the bottom */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 16, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 16 }}>
+                <TouchableOpacity
+                  onPress={resetFilters}
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 14,
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'transparent'
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: colors.text, textTransform: 'uppercase' }}>Reset</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={applyFilters}
+                  style={{
+                    flex: 1,
+                    height: 46,
+                    borderRadius: 14,
+                    backgroundColor: '#6366f1',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#ffffff', textTransform: 'uppercase' }}>Apply Filters</Text>
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
         </Modal>
